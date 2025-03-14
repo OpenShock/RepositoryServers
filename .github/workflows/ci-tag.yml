@@ -14,12 +14,12 @@ env:
 jobs:
 
   # Delegate building and containerizing to a single workflow.
-  build-and-containerize:
+  build:
     uses: ./.github/workflows/ci-build.yml
   
   release:
     runs-on: ubuntu-latest
-    needs: build-and-containerize
+    needs: build
 
     steps:
       - name: Download release notes

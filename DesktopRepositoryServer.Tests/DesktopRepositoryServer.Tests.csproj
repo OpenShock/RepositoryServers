@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net9.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+
+        <IsPackable>false</IsPackable>
+        <IsTestProject>true</IsTestProject>
+        <LangVersion>13</LangVersion>
+        <AssemblyName>OpenShock.Desktop.RepositoryServer.Tests</AssemblyName>
+        <RootNamespace>OpenShock.Desktop.RepositoryServer.Tests</RootNamespace>
+        <Company>OpenShock.Desktop.RepositoryServer.Tests</Company>
+        <Product>OpenShock.Desktop.RepositoryServer.Tests</Product>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="TUnit" Version="0.18.26" />
+    </ItemGroup>
+
+</Project>
