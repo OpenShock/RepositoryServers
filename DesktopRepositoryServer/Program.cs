@@ -36,8 +36,8 @@ builder.Host.UseDefaultServiceProvider((_, options) =>
     options.ValidateOnBuild = isDevelopment;
 });
 
-// Since we use slim builders, this allows for HTTPS during local development
-if (isDevelopment) builder.WebHost.UseKestrelHttpsConfiguration();
+// Since we use slim builders, this allows for HTTPS
+builder.WebHost.UseKestrelHttpsConfiguration();
         
 builder.WebHost.ConfigureKestrel(serverOptions =>
 {
