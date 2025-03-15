@@ -15,6 +15,13 @@ runs:
   using: composite
   
   steps:
+    - name: Tailscale
+      uses: tailscale/github-action@v3
+      with:
+        oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+        oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+        tags: tag:ci
+        
     - name: Rollout Kubernetes Deployment Restart
       shell: bash
       run: |
@@ -23,7 +30,6 @@ runs:
           echo "Deploying to deployment: $deployment"
           curl -k -f -o /dev/null -X PATCH "${{ inputs.apiurl }}/apis/apps/v1/namespaces/default/deployments/$deployment?fieldManager=kubectl-rollout&pretty=true" \
           --header "Content-Type: application/strategic-merge-patch+json" \
-          --header "Authorization: Bearer ${{ inputs.token }}" \
           --data-raw '{
             "spec": {
               "template": {
