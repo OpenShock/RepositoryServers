@@ -10,6 +10,12 @@ inputs:
   deployments:
     required: true
     description: Comma-separated list of deployment names
+  ts-oauth-client-id:
+    required: true
+    description: Tailscale OAuth Client ID
+  ts-oauth-secret:
+    required: true
+    description: Tailscale OAuth Secret
 
 runs:
   using: composite
@@ -18,8 +24,8 @@ runs:
     - name: Tailscale
       uses: tailscale/github-action@v3
       with:
-        oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-        oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+        oauth-client-id: ${{ inputs.ts-oauth-client-id }}
+        oauth-secret: ${{ inputs.ts-oauth-secret }}
         tags: tag:ci
         
     - name: Rollout Kubernetes Deployment Restart

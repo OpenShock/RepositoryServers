@@ -74,3 +74,5 @@ jobs:
           apiurl: ${{ secrets.KUBERNETES_APIURL }}
           token: ${{ secrets.KUBERNETES_TOKEN }}
           deployments: ${{ vars.DEPLOYMENT_NAMES }}
+          ts-oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          ts-oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
