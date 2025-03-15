@@ -41,17 +41,6 @@ if (isDevelopment) builder.WebHost.UseKestrelHttpsConfiguration();
         
 builder.WebHost.ConfigureKestrel(serverOptions =>
 {
-    serverOptions.ListenAnyIP(80, options =>
-    {
-        options.Protocols = HttpProtocols.Http1AndHttp2AndHttp3;
-    });
-#if DEBUG
-    serverOptions.ListenAnyIP(443, options =>
-    {
-        options.UseHttps();
-        options.Protocols = HttpProtocols.Http1AndHttp2AndHttp3;
-    });
-#endif
     serverOptions.Limits.RequestHeadersTimeout = TimeSpan.FromMilliseconds(3000);
 });
 
