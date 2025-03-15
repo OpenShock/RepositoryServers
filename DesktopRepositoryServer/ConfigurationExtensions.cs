@@ -13,6 +13,14 @@ public static class ConfigurationExtensions
         var config = builder.Configuration
             .Get<T>() ?? throw new Exception("Couldn't bind config, check config file");
 
+        var openshockSection = builder.Configuration.GetChildren()
+            .FirstOrDefault(x => x.Key.Equals("openshock", StringComparison.InvariantCultureIgnoreCase));
+
+        if (openshockSection != null)
+        {
+            openshockSection.Bind(config);
+        }
+
         MiniValidation.MiniValidator.TryValidate(config, true, true, out var errors);
         if (errors.Count > 0)
         {
