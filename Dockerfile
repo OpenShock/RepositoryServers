@@ -31,4 +31,11 @@ RUN dotnet publish --no-restore -o /app
 FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine AS final
 WORKDIR /app
 COPY --link --from=publish /app .
-ENTRYPOINT ["dotnet", "OpenShock.Desktop.RepositoryServer.dll"]
+COPY appsettings.Container.json /app/appsettings.Container.json
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+RUN apk update && apk add --no-cache openssl
+
+
+ENTRYPOINT ["/bin/ash", "/entrypoint.sh"]

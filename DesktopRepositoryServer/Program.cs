@@ -23,6 +23,7 @@ var builder = WebApplication.CreateSlimBuilder(args);
 builder.Configuration.Sources.Clear();
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
+    .AddJsonFile("appsettings.Container.json", optional: true, reloadOnChange: false)
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: false)
     .AddJsonFile("appsettings.Custom.json", optional: true, reloadOnChange: false)
     .AddEnvironmentVariables()
