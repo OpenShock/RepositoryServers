@@ -43,7 +43,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ steps.name.outputs.name }}
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/desktop-repository-server
           flavor: |
             latest=false
           tags: |
