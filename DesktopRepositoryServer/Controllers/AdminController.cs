@@ -27,7 +27,7 @@ public class AdminController : OpenShockControllerBase
     {
         var module = new Module
         {
-            Id = moduleId,
+            Id = moduleId.ToLowerInvariant(),
             Name = createModuleRequest.Name,
             Description = createModuleRequest.Description,
             SourceUrl = createModuleRequest.SourceUrl,
@@ -44,7 +44,7 @@ public class AdminController : OpenShockControllerBase
     [HttpDelete("modules/{moduleId}")]
     public async Task<IActionResult> DeleteModule([FromRoute] string moduleId)
     {
-        var executed = await _db.Modules.Where(x => x.Id == moduleId).ExecuteDeleteAsync();
+        var executed = await _db.Modules.Where(x => x.Id == moduleId.ToLowerInvariant()).ExecuteDeleteAsync();
         
         if(executed <= 0)  return Problem(ModuleError.ModuleNotFound);
 
@@ -55,7 +55,10 @@ public class AdminController : OpenShockControllerBase
     [HttpPut("modules/{moduleId}/versions/{moduleVersion}")]
     public async Task<IActionResult> CreateVersion([FromBody] CreateModuleVersionRequest createModuleVersionRequest, [FromRoute] string moduleId, [FromRoute] string moduleVersion)
     {
-        if (!SemVersion.TryParse(moduleVersion, SemVersionStyles.Strict, out SemVersion semVersion))
+        moduleId = moduleId.ToLowerInvariant();
+        moduleVersion = moduleVersion.ToLowerInvariant();
+        
+        if (!SemVersion.TryParse(moduleVersion, SemVersionStyles.Strict, out _))
         {
             return Problem(VersionError.VersionInvalidSemver);
         }
