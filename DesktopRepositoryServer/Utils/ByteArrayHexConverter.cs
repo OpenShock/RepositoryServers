@@ -7,7 +7,7 @@ public sealed class ByteArrayHexConverter : JsonConverter<byte[]>
 {
     public override byte[] Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        if (reader.TokenType == JsonTokenType.String)
+        if (reader.TokenType != JsonTokenType.String)
             throw new JsonException($"Expected string, but got {reader.TokenType}");
         
         return Convert.FromHexString(reader.GetString()!);
