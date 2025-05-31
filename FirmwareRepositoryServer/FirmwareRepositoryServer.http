@@ -1,0 +1,6 @@
+@FirmwareRepositoryServer_HostAddress = http://localhost:5273
+
+GET {{FirmwareRepositoryServer_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
