@@ -1,5 +1,4 @@
 ﻿<Solution>
   <Project Path="DesktopRepositoryServer.Tests\DesktopRepositoryServer.Tests.csproj" Type="Classic C#" />
   <Project Path="DesktopRepositoryServer\DesktopRepositoryServer.csproj" Type="Classic C#" />
-  <Project Path="FirmwareRepositoryServer\FirmwareRepositoryServer.csproj" Type="Classic C#" />
 </Solution>
