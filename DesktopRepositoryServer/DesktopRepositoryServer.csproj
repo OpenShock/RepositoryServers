@@ -36,12 +36,12 @@
       <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.12.0" />
       <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.12.0" />
       <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="1.12.0" />
-      <PackageReference Include="Scalar.AspNetCore" Version="2.4.7" />
+      <PackageReference Include="Scalar.AspNetCore" Version="2.4.13" />
       <PackageReference Include="Semver" Version="3.0.0" />
       <PackageReference Include="Serilog" Version="4.3.0" />
       <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
       <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
-      <PackageReference Include="Serilog.Sinks.Grafana.Loki" Version="8.3.0" />
+      <PackageReference Include="Serilog.Sinks.Grafana.Loki" Version="8.3.1" />
     </ItemGroup>
 
     <ItemGroup>
