@@ -1,52 +1,47 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
-
-    <PropertyGroup>
-        <TargetFramework>net9.0</TargetFramework>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <Nullable>enable</Nullable>
-        <AssemblyName>OpenShock.Desktop.RepositoryServer</AssemblyName>
-        <RootNamespace>OpenShock.Desktop.RepositoryServer</RootNamespace>
-        <Company>OpenShock</Company>
-        <Product>Desktop.RepositoryServer</Product>
-        <AssemblyVersion>1.0.0</AssemblyVersion>
-        <FileVersion>1.0.0</FileVersion>
-      <UserSecretsId>1e9d69ec-a751-45af-9dd2-312cc9964162</UserSecretsId>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>OpenShock.Desktop.RepositoryServer</AssemblyName>
+    <RootNamespace>OpenShock.Desktop.RepositoryServer</RootNamespace>
+    <Company>OpenShock</Company>
+    <Product>Desktop.RepositoryServer</Product>
+    <AssemblyVersion>1.0.0</AssemblyVersion>
+    <FileVersion>1.0.0</FileVersion>
+    <UserSecretsId>1e9d69ec-a751-45af-9dd2-312cc9964162</UserSecretsId>
   </PropertyGroup>
-
-    <ItemGroup>
-      <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />
-      <PackageReference Include="EntityFrameworkCore.Exceptions.PostgreSQL" />
-      <PackageReference Include="FlexLabs.EntityFrameworkCore.Upsert" />
-      <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
-      <PackageReference Include="Microsoft.EntityFrameworkCore" />
-      <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
-        <PrivateAssets>all</PrivateAssets>
-        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      </PackageReference>
-      <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
-      <PackageReference Include="Microsoft.EntityFrameworkCore.Tools">
-        <PrivateAssets>all</PrivateAssets>
-        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-      </PackageReference>
-        <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
-      <PackageReference Include="MiniValidation" />
-      <PackageReference Include="OneOf" />
-      <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" />
-      <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
-      <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
-      <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
-      <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
-      <PackageReference Include="Scalar.AspNetCore" />
-      <PackageReference Include="Semver" />
-      <PackageReference Include="Serilog" />
-      <PackageReference Include="Serilog.AspNetCore" />
-      <PackageReference Include="Serilog.Sinks.Console" />
-      <PackageReference Include="Serilog.Sinks.Grafana.Loki" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <Folder Include="Migrations\" />
-    </ItemGroup>
-    
-
+  <ItemGroup>
+    <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />
+    <PackageReference Include="EntityFrameworkCore.Exceptions.PostgreSQL" />
+    <PackageReference Include="FlexLabs.EntityFrameworkCore.Upsert" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="MiniValidation" />
+    <PackageReference Include="OneOf" />
+    <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" />
+    <PackageReference Include="Scalar.AspNetCore" />
+    <PackageReference Include="Semver" />
+    <PackageReference Include="Serilog" />
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Sinks.Console" />
+    <PackageReference Include="Serilog.Sinks.Grafana.Loki" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Migrations\" />
+  </ItemGroup>
 </Project>

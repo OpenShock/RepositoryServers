@@ -1,12 +1,14 @@
-FROM mcr.microsoft.com/dotnet/sdk:9.0-alpine AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
 WORKDIR /src
 
 COPY --link DesktopRepositoryServer/*.csproj DesktopRepositoryServer/
-RUN dotnet restore  DesktopRepositoryServer/DesktopRepositoryServer.csproj
+RUN dotnet restore DesktopRepositoryServer/DesktopRepositoryServer.csproj
 
 COPY --link DesktopRepositoryServer/. DesktopRepositoryServer/
 
-# test-build builds the xUnit test project
+RUN dotnet build --no-restore -c Release DesktopRepositoryServer/DesktopRepositoryServer.csproj
+
+# test-build builds the test project
 FROM build AS test-build
 
 COPY --link DesktopRepositoryServer.Tests/*.csproj tests/
@@ -28,7 +30,7 @@ RUN dotnet publish --no-restore -o /app
 
 
 # final is the final runtime stage for running the app
-FROM mcr.microsoft.com/dotnet/aspnet:9.0-alpine AS final
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS final
 WORKDIR /app
 COPY --link --from=publish /app .
 COPY appsettings.Container.json /app/appsettings.Container.json
