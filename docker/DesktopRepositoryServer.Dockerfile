@@ -3,6 +3,7 @@ WORKDIR /src
 
 COPY --link DesktopRepositoryServer/*.csproj DesktopRepositoryServer/
 COPY --link *.props .
+COPY --link *.json .
 RUN dotnet restore DesktopRepositoryServer/DesktopRepositoryServer.csproj
 
 COPY --link DesktopRepositoryServer/. DesktopRepositoryServer/
