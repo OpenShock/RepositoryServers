@@ -47,7 +47,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - dockerfile: docker/API.Dockerfile
+          - dockerfile: docker/DesktopRepositoryServer.Dockerfile
             image: desktop-repository-server
 
     steps:
