@@ -13,7 +13,7 @@ RUN dotnet publish --no-restore -c Release DesktopRepositoryServer/DesktopReposi
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS final
 WORKDIR /app
 
-COPY --link --from=publish /app .
+COPY --link --from=build /app .
 COPY appsettings.Container.json /app/appsettings.Container.json
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
