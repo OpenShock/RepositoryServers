@@ -1,12 +1,10 @@
 on:
   push:
     branches:
-      - master
-      - develop
+      - '**'
   pull_request:
     branches:
-      - master
-      - develop
+      - '**'
     types: [ opened, reopened, synchronize ]
   workflow_call:
   workflow_dispatch:
@@ -15,11 +13,42 @@ name: ci-build
 
 env:
   REGISTRY: ghcr.io
+    DOTNET_VERSION: 10.0.x
 
 jobs:
 
-  build:
+  tests:
+    name: Tests (${{ matrix.name }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: common-unit
+            project: DesktopRepositoryServer.Tests/DesktopRepositoryServer.Tests.csproj
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '${{ env.DOTNET_VERSION }}'
+
+      - name: Run ${{ matrix.name }} tests
+        run: |
+          set -euo pipefail
+          dotnet test -c Release ${{ matrix.project }}
+
+  build:
+    name: Build (${{ matrix.image }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dockerfile: docker/API.Dockerfile
+            image: desktop-repository-server
 
     steps:
       - name: Checkout
@@ -35,44 +64,57 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Docker
-        id: meta
-        uses: docker/metadata-action@v5
+      - name: Build ${{ matrix.image }}
+        uses: ./.github/actions/build-app
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/desktop-repository-server
-          flavor: |
-            latest=false
-          tags: |
-            type=raw,value={{branch}},enable=${{ github.ref_type == 'branch' && github.event_name != 'pull_request' }}
-            type=ref,event=branch
-            type=ref,event=pr
-
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          platforms: linux/amd64,linux/arm64
+          dockerfile: ${{ matrix.dockerfile }}
+          push: ${{ inputs.push || (github.ref_protected && github.event_name != 'pull_request') }}
+          image: ${{ matrix.image }}
+          platforms: ${{ inputs.platforms || 'linux/amd64' }}
+          tag-prefix: ${{ inputs.tag-prefix  || 'rn' }}
           
-  deploy-production:
+  promote-image:
+    name: Promote Image (${{ matrix.image }})
+    needs: [build, tests]
     runs-on: ubuntu-latest
-    needs: build
-    if: ${{ github.repository_owner == 'OpenShock' && github.ref_type == 'branch' && github.event_name != 'pull_request' && github.ref_name == 'master' }}
-    environment: production
-
+    if: ${{ inputs.push || (github.ref_protected && github.event_name != 'pull_request') }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: desktop-repository-server
+    
     steps:
-      - uses: actions/checkout@v5
-        with:
-          sparse-checkout: |
-            .github
+      - name: Checkout
+        uses: actions/checkout@v5
 
-      - uses: ./.github/actions/kubernetes-rollout-restart
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
         with:
-          apiurl: ${{ secrets.KUBERNETES_APIURL }}
-          token: ${{ secrets.KUBERNETES_TOKEN }}
-          deployments: ${{ vars.DEPLOYMENT_NAMES }}
-          ts-oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          ts-oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Promote Manifest ${{ matrix.image }}
+        uses: ./.github/actions/promote-image
+        with:
+          image: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
+          run-tag: ${{ inputs.tag-prefix  || 'rn' }}-${{ github.run_number }}-a${{ github.run_attempt }}
+          latest: ${{ inputs.latest || false }}
+          
+  deploy-prod-workflow:
+    runs-on: ubuntu-latest
+    needs: promote-image
+    if: ${{ github.ref_type == 'branch' && github.event_name != 'pull_request' && github.ref_name == 'master' }}
+    environment: production
+    steps:
+      - name: Send repository dispatch
+        uses: peter-evans/repository-dispatch@v4
+        with:
+          token: ${{ secrets.GITOPS_PAT }}
+          repository: openshock/kubernetes-cluster-gitops
+          event-type: update-desktop-repository-server-prod
+          client-payload: |
+            {
+              "tag": "${{ inputs.tag-prefix  || 'rn' }}-${{ github.run_number }}-a${{ github.run_attempt }}"
+            }
