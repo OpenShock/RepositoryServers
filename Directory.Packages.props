@@ -27,12 +27,12 @@
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.14.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Http" Version="1.14.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.Runtime" Version="1.14.0" />
-    <PackageVersion Include="Scalar.AspNetCore" Version="2.11.10" />
+    <PackageVersion Include="Scalar.AspNetCore" Version="2.12.4" />
     <PackageVersion Include="Semver" Version="3.0.0" />
     <PackageVersion Include="Serilog" Version="4.3.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageVersion Include="Serilog.Sinks.Console" Version="6.1.1" />
     <PackageVersion Include="Serilog.Sinks.Grafana.Loki" Version="8.3.2" />
-    <PackageVersion Include="TUnit" Version="1.9.2" />
+    <PackageVersion Include="TUnit" Version="1.9.81" />
   </ItemGroup>
 </Project>
