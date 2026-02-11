@@ -24,8 +24,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: desktop-repository-server-tunit
-            project: DesktopRepositoryServer.Tests/DesktopRepositoryServer.Tests.csproj
+          - name: repository-server-tunit
+            project: RepositoryServer.Tests/RepositoryServer.Tests.csproj
 
     steps:
       - name: Checkout
@@ -47,8 +47,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - dockerfile: docker/DesktopRepositoryServer.Dockerfile
-            image: desktop-repository-server
+          - dockerfile: docker/RepositoryServer.Dockerfile
+            image: repository-server
 
     steps:
       - name: Checkout
@@ -72,7 +72,7 @@ jobs:
           image: ${{ matrix.image }}
           platforms: ${{ inputs.platforms || 'linux/amd64' }}
           tag-prefix: ${{ inputs.tag-prefix  || 'rn' }}
-          
+
   promote-image:
     name: Promote Image (${{ matrix.image }})
     needs: [build, tests]
@@ -82,8 +82,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - image: desktop-repository-server
-    
+          - image: repository-server
+
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -101,7 +101,7 @@ jobs:
           image: ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ matrix.image }}
           run-tag: ${{ inputs.tag-prefix  || 'rn' }}-${{ github.run_number }}-a${{ github.run_attempt }}
           latest: ${{ inputs.latest || false }}
-          
+
   deploy-prod-workflow:
     runs-on: ubuntu-latest
     needs: promote-image
@@ -113,7 +113,7 @@ jobs:
         with:
           token: ${{ secrets.GITOPS_PAT }}
           repository: openshock/kubernetes-cluster-gitops
-          event-type: update-desktop-repository-server-prod
+          event-type: update-repository-server-prod
           client-payload: |
             {
               "tag": "${{ inputs.tag-prefix  || 'rn' }}-${{ github.run_number }}-a${{ github.run_attempt }}"
