@@ -1,4 +1,4 @@
-﻿namespace OpenShock.RepositoryServer.Models.Firmware;
+namespace OpenShock.RepositoryServer.Models.Firmware;
 
 public sealed class CreateFirmwareVersionRequest
 {
@@ -6,6 +6,6 @@ public sealed class CreateFirmwareVersionRequest
     public required DateTimeOffset ReleaseDate { get; init; }
     public required string CommitHash { get; init; }
     public string? ReleaseUrl { get; init; }
-    public required Dictionary<string, Dictionary<string, FirmwareArtifactUpload>> Artifacts { get; init; }
-    public required List<FirmwareReleaseNoteUpload> ReleaseNotes { get; init; }
+    public Dictionary<string, Dictionary<string, FirmwareArtifactUpload>>? Artifacts { get; init; }
+    public List<FirmwareReleaseNoteUpload> ReleaseNotes { get; init; } = [];
 }

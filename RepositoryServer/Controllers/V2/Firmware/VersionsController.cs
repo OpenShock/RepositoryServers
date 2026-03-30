@@ -5,6 +5,7 @@ using OpenShock.RepositoryServer.Config;
 using OpenShock.RepositoryServer.Models.Firmware;
 using OpenShock.RepositoryServer.Problems;
 using OpenShock.RepositoryServer.RepoServerDb;
+using OpenShock.RepositoryServer.Utils;
 
 namespace OpenShock.RepositoryServer.Controllers.V2.Firmware;
 
@@ -76,7 +77,7 @@ public sealed class VersionsController : OpenShockControllerBase
             list.Add(new FirmwareArtifactDto
             {
                 Type = artifact.ArtifactType.ToString().ToLowerInvariant(),
-                Url = $"{cdnBase}/{version.Version}/{artifact.BoardId}/{GetArtifactFileName(artifact.ArtifactType)}",
+                Url = $"{cdnBase}/{version.Version}/{artifact.BoardId}/{FirmwareArtifactFileNames.GetFileName(artifact.ArtifactType)}",
                 Sha256Hash = Convert.ToHexString(artifact.HashSha256),
                 FileSize = artifact.FileSize
             });
@@ -101,13 +102,4 @@ public sealed class VersionsController : OpenShockControllerBase
         });
     }
 
-    private static string GetArtifactFileName(FirmwareArtifactType type) => type switch
-    {
-        FirmwareArtifactType.Merged => "firmware.bin",
-        FirmwareArtifactType.App => "app.bin",
-        FirmwareArtifactType.Bootloader => "bootloader.bin",
-        FirmwareArtifactType.Partitions => "partitions.bin",
-        FirmwareArtifactType.StaticFs => "staticfs.bin",
-        _ => $"{type.ToString().ToLowerInvariant()}.bin"
-    };
 }

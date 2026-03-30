@@ -12,6 +12,7 @@ using OpenShock.RepositoryServer.AuthenticationHandlers;
 using OpenShock.RepositoryServer.Config;
 using OpenShock.RepositoryServer.ExceptionHandler;
 using OpenShock.RepositoryServer.RepoServerDb;
+using OpenShock.RepositoryServer.Services;
 using OpenShock.RepositoryServer.Utils;
 using OpenTelemetry.Metrics;
 using Scalar.AspNetCore;
@@ -127,6 +128,10 @@ builder.Services.AddOpenTelemetry()
         .AddAspNetCoreInstrumentation()
         .AddHttpClientInstrumentation()
         .AddPrometheusExporter());
+
+// <---- CDN Storage Service ---->
+builder.Services.AddHttpClient<CdnStorageService>();
+builder.Services.AddSingleton<CdnStorageService>();
 
 // <---- Postgres EF Core ---->
         
