@@ -27,7 +27,7 @@ public class AdminController : OpenShockControllerBase
     [HttpPut("versions/{firmwareVersion}")]
     public async Task<IActionResult> UpsertVersion([FromRoute] string firmwareVersion, [FromBody] CreateFirmwareVersionRequest request)
     {
-        if (!SemVersion.TryParse(firmwareVersion, SemVersionStyles.Any, out _))
+        if (!SemVersion.TryParse(firmwareVersion, SemVersionStyles.Strict, out _))
         {
             return Problem(FirmwareError.FirmwareInvalidSemver);
         }
@@ -67,33 +67,23 @@ public class AdminController : OpenShockControllerBase
         {
             if (!Enum.TryParse<FirmwareReleaseNoteType>(note.Type, true, out _))
             {
-                return Problem(new OpenShockProblem("Firmware.InvalidReleaseNoteType", "The release note type provided is not valid"));
+                return Problem(FirmwareError.FirmwareInvalidReleaseNoteType);
             }
         }
 
         await using var transaction = await _db.Database.BeginTransactionAsync();
 
         // Upsert the firmware version
-        var existingVersion = await _db.FirmwareVersions.FirstOrDefaultAsync(v => v.Version == firmwareVersion);
-        if (existingVersion != null)
+        var versionEntity = new FirmwareVersion
         {
-            existingVersion.Channel = channel;
-            existingVersion.ReleaseDate = request.ReleaseDate;
-            existingVersion.CommitHash = request.CommitHash;
-            existingVersion.ReleaseUrl = request.ReleaseUrl;
-        }
-        else
-        {
-            _db.FirmwareVersions.Add(new FirmwareVersion
-            {
-                Version = firmwareVersion,
-                Channel = channel,
-                ReleaseDate = request.ReleaseDate,
-                CommitHash = request.CommitHash,
-                ReleaseUrl = request.ReleaseUrl
-            });
-        }
-        await _db.SaveChangesAsync();
+            Version = firmwareVersion,
+            Channel = channel,
+            ReleaseDate = request.ReleaseDate,
+            CommitHash = request.CommitHash,
+            ReleaseUrl = request.ReleaseUrl
+        };
+        var executed = await _db.FirmwareVersions.Upsert(versionEntity).On(v => v.Version).RunAsync();
+        if (executed <= 0) throw new Exception("Failed to upsert firmware version");
 
         // Replace all artifacts for this version
         await _db.FirmwareArtifacts.Where(a => a.Version == firmwareVersion).ExecuteDeleteAsync();
@@ -144,24 +134,6 @@ public class AdminController : OpenShockControllerBase
 
     // ---- Board Management ----
 
-    [HttpGet("boards")]
-    public async Task<IActionResult> ListBoards()
-    {
-        var boards = await _db.FirmwareBoards
-            .Include(b => b.ChipNavigation)
-            .Select(b => new FirmwareBoardDto
-            {
-                Id = b.Id,
-                Name = b.Name,
-                ChipId = b.ChipId,
-                ChipName = b.ChipNavigation.Name,
-                Discontinued = b.Discontinued
-            })
-            .ToListAsync();
-
-        return Ok(boards);
-    }
-
     [HttpPut("boards/{boardId}")]
     public async Task<IActionResult> UpsertBoard([FromRoute] string boardId, [FromBody] CreateFirmwareBoardRequest request)
     {
@@ -170,24 +142,22 @@ public class AdminController : OpenShockControllerBase
             return Problem(FirmwareError.FirmwareChipNotFound);
         }
 
-        var existing = await _db.FirmwareBoards.FirstOrDefaultAsync(b => b.Id == boardId);
-        if (existing != null)
+        var board = new FirmwareBoard
         {
-            existing.Name = request.Name;
-            existing.ChipId = request.ChipId;
-        }
-        else
-        {
-            _db.FirmwareBoards.Add(new FirmwareBoard
+            Id = boardId,
+            Name = request.Name,
+            ChipId = request.ChipId,
+            Discontinued = false
+        };
+        var executed = await _db.FirmwareBoards.Upsert(board).On(b => b.Id)
+            .WhenMatched(b => new FirmwareBoard
             {
-                Id = boardId,
-                Name = request.Name,
-                ChipId = request.ChipId,
-                Discontinued = false
-            });
-        }
+                Name = board.Name,
+                ChipId = board.ChipId
+            })
+            .RunAsync();
+        if (executed <= 0) throw new Exception("Failed to upsert firmware board");
 
-        await _db.SaveChangesAsync();
         return Created();
     }
 
@@ -217,21 +187,6 @@ public class AdminController : OpenShockControllerBase
 
     // ---- Chip Management ----
 
-    [HttpGet("chips")]
-    public async Task<IActionResult> ListChips()
-    {
-        var chips = await _db.FirmwareChips
-            .Select(c => new FirmwareChipDto
-            {
-                Id = c.Id,
-                Name = c.Name,
-                Architecture = c.Architecture != null ? c.Architecture.Value.ToString().ToLowerInvariant() : null
-            })
-            .ToListAsync();
-
-        return Ok(chips);
-    }
-
     [HttpPut("chips/{chipId}")]
     public async Task<IActionResult> UpsertChip([FromRoute] string chipId, [FromBody] CreateFirmwareChipRequest request)
     {
@@ -240,28 +195,20 @@ public class AdminController : OpenShockControllerBase
         {
             if (!Enum.TryParse<FirmwareChipArchitecture>(request.Architecture, true, out var parsed))
             {
-                return Problem(new OpenShockProblem("Firmware.InvalidArchitecture", "The architecture provided is not valid"));
+                return Problem(FirmwareError.FirmwareInvalidArchitecture);
             }
             architecture = parsed;
         }
 
-        var existing = await _db.FirmwareChips.FirstOrDefaultAsync(c => c.Id == chipId);
-        if (existing != null)
+        var chip = new FirmwareChip
         {
-            existing.Name = request.Name;
-            existing.Architecture = architecture;
-        }
-        else
-        {
-            _db.FirmwareChips.Add(new FirmwareChip
-            {
-                Id = chipId,
-                Name = request.Name,
-                Architecture = architecture
-            });
-        }
+            Id = chipId,
+            Name = request.Name,
+            Architecture = architecture
+        };
+        var executed = await _db.FirmwareChips.Upsert(chip).On(c => c.Id).RunAsync();
+        if (executed <= 0) throw new Exception("Failed to upsert firmware chip");
 
-        await _db.SaveChangesAsync();
         return Created();
     }
 

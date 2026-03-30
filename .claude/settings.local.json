@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git mv:*)",
+      "Bash(find:*)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet ef migrations add:*)",
+      "Bash(dotnet test:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git config:*)",
+      "Bash(git push:*)",
+      "Bash(git -C /src/openshock/firmware remote -v)",
+      "Bash(git remote set-url:*)",
+      "Bash(git -C /src/openshock/API pull)",
+      "Bash(git -C /src/openshock/API checkout develop)",
+      "Bash(git -C /src/openshock/API pull origin develop)",
+      "Bash(ls:*)",
+      "Bash(git checkout:*)",
+      "Bash(gh pr create:*)",
+      "Bash(rm /src/openshock/repositoryservers/RepositoryServer/Controllers/V2/Desktop/AdminController.cs /src/openshock/repositoryservers/RepositoryServer/Controllers/V2/Desktop/RepoController.cs)",
+      "Bash(rmdir /src/openshock/repositoryservers/RepositoryServer/Controllers/V2/Desktop)"
+    ]
+  }
+}

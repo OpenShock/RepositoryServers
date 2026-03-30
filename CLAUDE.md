@@ -8,7 +8,7 @@ Unified repository server for distributing OpenShock desktop app modules and fir
 - PostgreSQL via Npgsql + EF Core (with DbContext pooling)
 - Serilog (console + Grafana Loki)
 - OpenTelemetry (Prometheus exporter)
-- API Versioning (Asp.Versioning) — URL-based: `/v1/`, `/v2/desktop/`, `/v2/firmware/`
+- API Versioning (Asp.Versioning) — URL-based: `/v1/`, `/v2/firmware/`
 - FlexLabs.EntityFrameworkCore.Upsert for upserts
 - MiniValidation for config validation
 - Semver NuGet package for semver parsing
@@ -23,13 +23,10 @@ RepositoryServer/                    # Main web API project
   Config/                            # ApiConfig, DbConfig, RepoConfig, MetricsConfig, FirmwareConfig
   Controllers/
     OpenShockControllerBase.cs       # Shared base controller
-    V1/                              # Legacy desktop endpoints (backwards compat)
+    V1/                              # Desktop endpoints
       RepoController.cs             # GET /v1/ — desktop module manifest
       AdminController.cs            # /v1/admin/... — desktop module CRUD
     V2/
-      Desktop/                       # Same as V1 under new prefix
-        RepoController.cs           # GET /v2/desktop/
-        AdminController.cs          # /v2/desktop/admin/...
       Firmware/
         LatestController.cs          # GET /v2/firmware/latest/{channel}
         VersionsController.cs        # GET /v2/firmware/versions[/{version}]
