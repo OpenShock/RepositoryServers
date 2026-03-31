@@ -1,4 +1,4 @@
 ﻿<Solution>
-  <Project Path="DesktopRepositoryServer.Tests\DesktopRepositoryServer.Tests.csproj" Type="Classic C#" />
-  <Project Path="DesktopRepositoryServer\DesktopRepositoryServer.csproj" Type="Classic C#" />
+  <Project Path="RepositoryServer.Tests\RepositoryServer.Tests.csproj" Type="Classic C#" />
+  <Project Path="RepositoryServer\RepositoryServer.csproj" Type="Classic C#" />
 </Solution>
