@@ -1,10 +1,11 @@
-﻿using System.Text.Json;
+﻿using System.Net;
+using System.Security.Claims;
+using System.Text.Json;
 using Asp.Versioning;
 using EntityFramework.Exceptions.PostgreSQL;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenShock.RepositoryServer;
@@ -53,10 +54,44 @@ var config = builder.GetAndRegisterOpenShockConfig<ApiConfig>();
 // <---- ASP.NET ---->
 builder.Services.AddExceptionHandler<OpenShockExceptionHandler>();
 
-builder.Services.AddAuthenticationCore();
-new AuthenticationBuilder(builder.Services)
+builder.Services.AddAuthentication()
     .AddScheme<AuthenticationSchemeOptions, AdminTokenAuthentication>(
-        AuthSchemas.AdminToken, _ => { });
+        AuthSchemas.AdminToken, _ => { })
+    .AddJwtBearer(AuthSchemas.CiCdToken, options =>
+    {
+        options.Authority = "https://token.actions.githubusercontent.com";
+        options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidIssuer = "https://token.actions.githubusercontent.com",
+            ValidateAudience = true,
+            ValidAudience = config.CiCd.Audience,
+            ValidateLifetime = true,
+        };
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = context =>
+            {
+                var owner = context.Principal?.FindFirstValue("repository_owner");
+                if (!string.Equals(owner, config.CiCd.RepositoryOwner, StringComparison.OrdinalIgnoreCase))
+                {
+                    context.Fail("Repository owner is not allowed.");
+                    return Task.CompletedTask;
+                }
+
+                if (config.CiCd.AllowedRepositories is { Count: > 0 })
+                {
+                    var repo = context.Principal?.FindFirstValue("repository");
+                    if (repo == null || !config.CiCd.AllowedRepositories.Contains(repo, StringComparer.OrdinalIgnoreCase))
+                    {
+                        context.Fail("Repository is not allowed.");
+                    }
+                }
+
+                return Task.CompletedTask;
+            }
+        };
+    });
 
 builder.Services.AddAuthorization();
 
@@ -129,12 +164,37 @@ builder.Services.AddOpenTelemetry()
         .AddHttpClientInstrumentation()
         .AddPrometheusExporter());
 
-// <---- CDN Storage Service ---->
-builder.Services.AddHttpClient<CdnStorageService>();
-builder.Services.AddSingleton<CdnStorageService>();
+// <---- Storage Service ---->
+switch (config.Firmware.Storage.Type)
+{
+    case StorageType.BunnyCdn:
+        var bunnyCdnConfig = config.Firmware.Storage.BunnyCdn
+                             ?? throw new InvalidOperationException("BunnyCdn storage config is required when Type is BunnyCdn.");
+        builder.Services.AddSingleton(bunnyCdnConfig);
+        builder.Services.AddHttpClient<BunnyCdnStorageService>();
+        builder.Services.AddSingleton<IStorageService>(sp => sp.GetRequiredService<BunnyCdnStorageService>());
+        break;
+
+    case StorageType.Local:
+        var localConfig = config.Firmware.Storage.Local
+                          ?? throw new InvalidOperationException("Local storage config is required when Type is Local.");
+        builder.Services.AddSingleton(localConfig);
+        builder.Services.AddSingleton<IStorageService, LocalStorageService>();
+        break;
+
+    case StorageType.S3:
+        var s3Config = config.Firmware.Storage.S3
+                       ?? throw new InvalidOperationException("S3 storage config is required when Type is S3.");
+        builder.Services.AddSingleton(s3Config);
+        builder.Services.AddSingleton<IStorageService, S3StorageService>();
+        break;
+
+    default:
+        throw new InvalidOperationException($"Unknown storage type: {config.Firmware.Storage.Type}");
+}
 
 // <---- Postgres EF Core ---->
-        
+
 builder.Services.AddDbContextPool<RepoServerContext>(dbBuilder =>
 {
     RepoServerContext.ConfigureOptionsBuilder(dbBuilder, config.Db.Conn, config.Db.Debug);
@@ -142,13 +202,7 @@ builder.Services.AddDbContextPool<RepoServerContext>(dbBuilder =>
 
 builder.Services.AddPooledDbContextFactory<RepoServerContext>(dbBuilder =>
 {
-    dbBuilder.UseNpgsql(config.Db.Conn);
-    dbBuilder.UseExceptionProcessor();
-    if (config.Db.Debug)
-    {
-        dbBuilder.EnableSensitiveDataLogging();
-        dbBuilder.EnableDetailedErrors();
-    }
+    RepoServerContext.ConfigureOptionsBuilder(dbBuilder, config.Db.Conn, config.Db.Debug);
 });
 
 
@@ -205,7 +259,7 @@ app.UseRouting();
 app.UseAuthentication();
 app.UseAuthorization();
 
-var metricsAllowedIpNetworks = config.Metrics.AllowedNetworks.Select(x => IPNetwork.Parse(x));
+var metricsAllowedIpNetworks = config.Metrics.AllowedNetworks.Select(IPNetwork.Parse);
         
 app.UseOpenTelemetryPrometheusScrapingEndpoint(context =>
 {

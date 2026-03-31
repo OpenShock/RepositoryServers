@@ -6,6 +6,7 @@ public class ApiConfig
 {
     [Required] public required DbConfig Db { get; init; }
     [Required] public required string AdminToken { get; init; }
+    [Required] public required CiCdAuthConfig CiCd { get; init; }
     [Required] public required RepoConfig Repo { get; init; }
     [Required] public required FirmwareConfig Firmware { get; init; }
     public MetricsConfig Metrics { get; init; } = new();

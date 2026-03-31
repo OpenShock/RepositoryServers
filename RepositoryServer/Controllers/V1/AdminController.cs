@@ -52,6 +52,7 @@ public class AdminController : OpenShockControllerBase
         return Ok();
     }
 
+    [Obsolete("Use the CI/CD endpoint at /v1/cicd/modules/{moduleId}/versions/{moduleVersion} instead.")]
     [HttpPut("modules/{moduleId}/versions/{moduleVersion}")]
     public async Task<IActionResult> CreateVersion([FromBody] CreateModuleVersionRequest createModuleVersionRequest, [FromRoute] string moduleId, [FromRoute] string moduleVersion)
     {

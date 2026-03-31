@@ -6,6 +6,7 @@ public class FirmwareBoard
     public string ChipId { get; set; } = null!;
     public string Name { get; set; } = null!;
     public bool Discontinued { get; set; }
+    public FirmwareArtifactType[] RequiredArtifactTypes { get; set; } = [];
 
     public virtual FirmwareChip ChipNavigation { get; set; } = null!;
     public virtual ICollection<FirmwareArtifact> Artifacts { get; set; } = new List<FirmwareArtifact>();

@@ -4,4 +4,5 @@ public sealed class CreateFirmwareBoardRequest
 {
     public required string Name { get; init; }
     public required string ChipId { get; init; }
+    public List<string>? RequiredArtifactTypes { get; init; }
 }

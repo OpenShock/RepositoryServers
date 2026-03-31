@@ -14,4 +14,6 @@ public static class FirmwareError
     public static OpenShockProblem FirmwareInvalidArchitecture => new("Firmware.InvalidArchitecture", "The architecture provided is not valid");
     public static OpenShockProblem FirmwareBoardInUse => new("Firmware.BoardInUse", "Cannot delete board that has associated artifacts", HttpStatusCode.Conflict);
     public static OpenShockProblem FirmwareChipInUse => new("Firmware.ChipInUse", "Cannot delete chip that has associated boards", HttpStatusCode.Conflict);
+    public static OpenShockProblem FirmwareMissingRequiredArtifacts(string boardId, IEnumerable<string> missing) =>
+        new("Firmware.MissingRequiredArtifacts", $"Board '{boardId}' is missing required artifact types: {string.Join(", ", missing)}");
 }

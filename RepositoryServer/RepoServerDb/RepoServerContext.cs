@@ -32,7 +32,11 @@ public sealed class MigrationOpenShockContext : RepoServerContext
     {
         if (_migrationTool)
         {
-            ConfigureOptionsBuilder(optionsBuilder, "Host=localhost;Database=repo-server;Username=openshock;Password=openshock", true);
+            // Migration tooling: plain connection string, no MapEnum (to avoid duplicate enum schemas)
+            optionsBuilder.UseNpgsql("Host=localhost;Database=repo-server;Username=openshock;Password=openshock");
+            optionsBuilder.UseExceptionProcessor();
+            optionsBuilder.EnableSensitiveDataLogging();
+            optionsBuilder.EnableDetailedErrors();
             return;
         }
         if(string.IsNullOrWhiteSpace(_connectionString))
@@ -60,13 +64,17 @@ public partial class RepoServerContext : DbContext
     {
         optionsBuilder.UseNpgsql(connectionString, npgsqlBuilder =>
         {
-            npgsqlBuilder.MapEnum<FirmwareChannel>("firmware_channel");
-            npgsqlBuilder.MapEnum<FirmwareArtifactType>("firmware_artifact_type");
-            npgsqlBuilder.MapEnum<FirmwareReleaseNoteType>("firmware_release_note_type");
-            npgsqlBuilder.MapEnum<FirmwareChipArchitecture>("firmware_chip_architecture");
+            npgsqlBuilder.MapEnum<FirmwareChannel>();
+            npgsqlBuilder.MapEnum<FirmwareArtifactType>();
+            npgsqlBuilder.MapEnum<FirmwareReleaseNoteType>();
+            npgsqlBuilder.MapEnum<FirmwareChipArchitecture>();
         });
 
         optionsBuilder.UseExceptionProcessor();
+
+        // Suppress false positive: EF Core 10 sees enum schema differences from EF Core 9 snapshots
+        optionsBuilder.ConfigureWarnings(w =>
+            w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
 
         if (debug)
         {
@@ -89,10 +97,11 @@ public partial class RepoServerContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // PostgreSQL enum mappings
-        modelBuilder.HasPostgresEnum<FirmwareChannel>("firmware_channel");
-        modelBuilder.HasPostgresEnum<FirmwareArtifactType>("firmware_artifact_type");
-        modelBuilder.HasPostgresEnum<FirmwareReleaseNoteType>("firmware_release_note_type");
-        modelBuilder.HasPostgresEnum<FirmwareChipArchitecture>("firmware_chip_architecture");
+        modelBuilder
+            .HasPostgresEnum("firmware_channel", ["stable", "beta", "develop"])
+            .HasPostgresEnum("firmware_artifact_type", ["merged", "app", "bootloader", "partitions", "static_fs"])
+            .HasPostgresEnum("firmware_release_note_type", ["warning", "info", "breaking", "section"])
+            .HasPostgresEnum("firmware_chip_architecture", ["xtensa", "risc_v"]);
 
         // Desktop module entities (unchanged)
         modelBuilder.Entity<Module>(entity =>
@@ -177,6 +186,8 @@ public partial class RepoServerContext : DbContext
             entity.Property(e => e.Discontinued)
                 .HasDefaultValue(false)
                 .HasColumnName("discontinued");
+            entity.Property(e => e.RequiredArtifactTypes)
+                .HasColumnName("required_artifact_types");
 
             entity.HasOne(d => d.ChipNavigation).WithMany(p => p.Boards)
                 .HasForeignKey(d => d.ChipId)

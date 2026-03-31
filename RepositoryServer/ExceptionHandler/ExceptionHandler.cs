@@ -18,6 +18,7 @@ public sealed class OpenShockExceptionHandler : IExceptionHandler
     public async ValueTask<bool> TryHandleAsync(HttpContext context, Exception exception, CancellationToken cancellationToken)
     {
         context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
+        _logger.LogError(exception, "Unhandled exception for {Method} {Path}", context.Request.Method, context.Request.Path);
         await PrintRequestInfo(context);
         
         var responseObject = ExceptionError.Exception;
