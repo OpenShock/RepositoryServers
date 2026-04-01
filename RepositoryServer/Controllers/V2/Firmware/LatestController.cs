@@ -27,7 +27,7 @@ public sealed class LatestController : OpenShockControllerBase
     [HttpGet("{channel}")]
     public async Task<IActionResult> GetLatest([FromRoute] string channel, [FromQuery] string? board)
     {
-        if (!Enum.TryParse<FirmwareChannel>(channel, true, out var firmwareChannel))
+        if (!Enum.TryParse<ReleaseChannel>(channel, true, out var firmwareChannel))
         {
             return Problem(FirmwareError.FirmwareInvalidChannel);
         }

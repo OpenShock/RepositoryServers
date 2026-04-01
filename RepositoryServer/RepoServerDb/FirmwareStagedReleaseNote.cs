@@ -1,14 +1,14 @@
-﻿using OpenShock.RepositoryServer.Enums;
+using OpenShock.RepositoryServer.Enums;
 
 namespace OpenShock.RepositoryServer.RepoServerDb;
 
-public class FirmwareReleaseNote
+public class FirmwareStagedReleaseNote
 {
-    public string Version { get; set; } = null!;
+    public Guid ReleaseId { get; set; }
     public int Index { get; set; }
     public ReleaseNoteSectionType SectionType { get; set; }
     public string? Title { get; set; }
     public string Content { get; set; } = null!;
 
-    public virtual FirmwareVersion VersionNavigation { get; set; } = null!;
+    public virtual FirmwareRelease ReleaseNavigation { get; set; } = null!;
 }

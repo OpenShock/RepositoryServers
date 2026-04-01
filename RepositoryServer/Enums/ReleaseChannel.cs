@@ -1,6 +1,6 @@
 ﻿namespace OpenShock.RepositoryServer.Enums;
 
-public enum FirmwareChannel
+public enum ReleaseChannel
 {
     Stable,
     Beta,

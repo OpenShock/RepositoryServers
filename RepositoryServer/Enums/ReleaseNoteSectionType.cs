@@ -1,6 +1,6 @@
 ﻿namespace OpenShock.RepositoryServer.Enums;
 
-public enum FirmwareReleaseNoteType
+public enum ReleaseNoteSectionType
 {
     Warning,
     Info,

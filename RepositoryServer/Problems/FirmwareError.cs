@@ -17,4 +17,12 @@ public static class FirmwareError
     public static OpenShockProblem FirmwareMissingRequiredArtifacts(string boardId, IEnumerable<string> missing) =>
         new("Firmware.MissingRequiredArtifacts", $"Board '{boardId}' is missing required artifact types: {string.Join(", ", missing)}");
     public static OpenShockProblem FirmwareArtifactNotFound => new("Firmware.ArtifactNotFound", "The referenced firmware artifact was not found", HttpStatusCode.NotFound);
+
+    public static OpenShockProblem FirmwareReleaseNotFound => new("Firmware.ReleaseNotFound", "The referenced firmware release was not found", HttpStatusCode.NotFound);
+    public static OpenShockProblem FirmwareReleaseNotStaging => new("Firmware.ReleaseNotStaging", "The firmware release is not in staging status", HttpStatusCode.Conflict);
+    public static OpenShockProblem FirmwareReleaseAlreadyStaging => new("Firmware.ReleaseAlreadyStaging", "A staging release for this version already exists", HttpStatusCode.Conflict);
+    public static OpenShockProblem FirmwareReleaseBoardsEmpty => new("Firmware.ReleaseBoardsEmpty", "At least one board must be declared for a release");
+    public static OpenShockProblem FirmwareBoardNotDeclared => new("Firmware.BoardNotDeclared", "The board was not declared in the release init");
+    public static OpenShockProblem FirmwareReleaseIncomplete(IEnumerable<string> missingBoards) =>
+        new("Firmware.ReleaseIncomplete", $"Not all declared boards have been uploaded. Missing: {string.Join(", ", missingBoards)}");
 }
