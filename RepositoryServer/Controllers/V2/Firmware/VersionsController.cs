@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OpenShock.RepositoryServer.Config;
+using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.Models.Firmware;
 using OpenShock.RepositoryServer.Problems;
 using OpenShock.RepositoryServer.RepoServerDb;
@@ -30,7 +31,7 @@ public sealed class VersionsController : OpenShockControllerBase
 
         if (!string.IsNullOrWhiteSpace(channel))
         {
-            if (!Enum.TryParse<FirmwareChannel>(channel, true, out var firmwareChannel))
+            if (!Enum.TryParse<ReleaseChannel>(channel, true, out var firmwareChannel))
             {
                 return Problem(FirmwareError.FirmwareInvalidChannel);
             }
@@ -85,7 +86,7 @@ public sealed class VersionsController : OpenShockControllerBase
 
         var releaseNotes = version.ReleaseNotes.Select(n => new FirmwareReleaseNoteDto
         {
-            Type = n.Type.ToString().ToLowerInvariant(),
+            Type = n.SectionType.ToString().ToLowerInvariant(),
             Title = n.Title,
             Content = n.Content
         }).ToList();

@@ -64,10 +64,11 @@ public partial class RepoServerContext : DbContext
     {
         optionsBuilder.UseNpgsql(connectionString, npgsqlBuilder =>
         {
-            npgsqlBuilder.MapEnum<FirmwareChannel>();
+            npgsqlBuilder.MapEnum<ReleaseChannel>();
             npgsqlBuilder.MapEnum<FirmwareArtifactType>();
-            npgsqlBuilder.MapEnum<FirmwareReleaseNoteType>();
+            npgsqlBuilder.MapEnum<ReleaseNoteSectionType>();
             npgsqlBuilder.MapEnum<FirmwareChipArchitecture>();
+            npgsqlBuilder.MapEnum<FirmwareReleaseStatus>();
         });
 
         optionsBuilder.UseExceptionProcessor();
@@ -101,7 +102,8 @@ public partial class RepoServerContext : DbContext
             .HasPostgresEnum("firmware_channel", ["stable", "beta", "develop"])
             .HasPostgresEnum("firmware_artifact_type", ["merged", "app", "bootloader", "partitions", "static_fs"])
             .HasPostgresEnum("firmware_release_note_type", ["warning", "info", "breaking", "section"])
-            .HasPostgresEnum("firmware_chip_architecture", ["xtensa", "risc_v"]);
+            .HasPostgresEnum("firmware_chip_architecture", ["xtensa", "risc_v"])
+            .HasPostgresEnum("firmware_release_status", ["staging", "published", "aborted"]);
 
         // Desktop module entities (unchanged)
         modelBuilder.Entity<Module>(entity =>
@@ -257,7 +259,7 @@ public partial class RepoServerContext : DbContext
                 .HasColumnName("version");
             entity.Property(e => e.Index)
                 .HasColumnName("index");
-            entity.Property(e => e.Type)
+            entity.Property(e => e.SectionType)
                 .HasColumnName("type");
             entity.Property(e => e.Title)
                 .HasMaxLength(256)
@@ -269,6 +271,85 @@ public partial class RepoServerContext : DbContext
                 .HasForeignKey(d => d.Version)
                 .OnDelete(DeleteBehavior.Cascade)
                 .HasConstraintName("fk_firmware_release_notes_version");
+        });
+
+        modelBuilder.Entity<FirmwareRelease>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("firmware_releases_pkey");
+            entity.ToTable("firmware_releases");
+
+            entity.Property(e => e.Id)
+                .HasColumnName("id");
+            entity.Property(e => e.Version)
+                .HasMaxLength(64)
+                .HasColumnName("version");
+            entity.Property(e => e.Channel)
+                .HasColumnName("channel");
+            entity.Property(e => e.CommitHash)
+                .HasMaxLength(40)
+                .HasColumnName("commit_hash");
+            entity.Property(e => e.ReleaseUrl)
+                .HasMaxLength(256)
+                .HasColumnName("release_url");
+            entity.Property(e => e.ReleaseDate)
+                .HasColumnName("release_date");
+            entity.Property(e => e.Status)
+                .HasColumnName("status");
+            entity.Property(e => e.DeclaredBoards)
+                .HasColumnName("declared_boards");
+            entity.Property(e => e.CreatedAt)
+                .HasColumnName("created_at");
+
+            entity.HasIndex(e => new { e.Version, e.Status })
+                .HasDatabaseName("ix_firmware_releases_version_status");
+        });
+
+        modelBuilder.Entity<FirmwareStagedArtifact>(entity =>
+        {
+            entity.HasKey(e => new { e.ReleaseId, e.BoardId, e.ArtifactType })
+                .HasName("firmware_staged_artifacts_pkey");
+            entity.ToTable("firmware_staged_artifacts");
+
+            entity.Property(e => e.ReleaseId)
+                .HasColumnName("release_id");
+            entity.Property(e => e.BoardId)
+                .HasMaxLength(64)
+                .HasColumnName("board_id");
+            entity.Property(e => e.ArtifactType)
+                .HasColumnName("artifact_type");
+            entity.Property(e => e.HashSha256)
+                .HasColumnName("hash_sha256");
+            entity.Property(e => e.FileSize)
+                .HasColumnName("file_size");
+
+            entity.HasOne(d => d.ReleaseNavigation).WithMany(p => p.StagedArtifacts)
+                .HasForeignKey(d => d.ReleaseId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_firmware_staged_artifacts_release");
+        });
+
+        modelBuilder.Entity<FirmwareStagedReleaseNote>(entity =>
+        {
+            entity.HasKey(e => new { e.ReleaseId, e.Index })
+                .HasName("firmware_staged_release_notes_pkey");
+            entity.ToTable("firmware_staged_release_notes");
+
+            entity.Property(e => e.ReleaseId)
+                .HasColumnName("release_id");
+            entity.Property(e => e.Index)
+                .HasColumnName("index");
+            entity.Property(e => e.SectionType)
+                .HasColumnName("type");
+            entity.Property(e => e.Title)
+                .HasMaxLength(256)
+                .HasColumnName("title");
+            entity.Property(e => e.Content)
+                .HasColumnName("content");
+
+            entity.HasOne(d => d.ReleaseNavigation).WithMany(p => p.StagedReleaseNotes)
+                .HasForeignKey(d => d.ReleaseId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("fk_firmware_staged_release_notes_release");
         });
     }
 }

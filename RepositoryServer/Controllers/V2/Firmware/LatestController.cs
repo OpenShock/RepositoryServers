@@ -2,6 +2,7 @@ using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OpenShock.RepositoryServer.Config;
+using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.Models.Firmware;
 using OpenShock.RepositoryServer.Problems;
 using OpenShock.RepositoryServer.RepoServerDb;
@@ -26,7 +27,7 @@ public sealed class LatestController : OpenShockControllerBase
     [HttpGet("{channel}")]
     public async Task<IActionResult> GetLatest([FromRoute] string channel, [FromQuery] string? board)
     {
-        if (!Enum.TryParse<FirmwareChannel>(channel, true, out var firmwareChannel))
+        if (!Enum.TryParse<ReleaseChannel>(channel, true, out var firmwareChannel))
         {
             return Problem(FirmwareError.FirmwareInvalidChannel);
         }

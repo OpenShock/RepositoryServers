@@ -1,4 +1,6 @@
-﻿namespace OpenShock.RepositoryServer.RepoServerDb;
+﻿using OpenShock.RepositoryServer.Enums;
+
+namespace OpenShock.RepositoryServer.RepoServerDb;
 
 public class FirmwareArtifact
 {
