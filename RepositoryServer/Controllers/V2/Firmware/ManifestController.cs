@@ -94,7 +94,7 @@ public sealed class ManifestController : OpenShockControllerBase
             {
                 Id = c.Id,
                 Name = c.Name,
-                Architecture = c.Architecture?.ToString().ToLowerInvariant(),
+                Architecture = EnumNaming.FormatArchitecture(c.Architecture),
                 UsbDevices = c.UsbDevices
                     .Select(d => new FirmwareUsbDeviceDto { Id = d.Id, Vid = d.Vid, Pid = d.Pid, Name = d.Name })
                     .ToList()

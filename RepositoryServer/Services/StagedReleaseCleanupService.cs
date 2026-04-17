@@ -42,23 +42,31 @@ public sealed class StagedReleaseCleanupService : BackgroundService
     {
         using var timer = new PeriodicTimer(TickInterval, _timeProvider);
 
-        // Fire once immediately, then on every tick.
-        await TickAsync(stoppingToken);
+        // Fire once immediately, then on every tick. The DB may be unreachable at
+        // startup (migrations still running, Postgres warming up in tests, etc.) —
+        // errors are swallowed so the service keeps retrying on the timer.
+        await SafeTickAsync(stoppingToken);
 
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
-            try
-            {
-                await TickAsync(stoppingToken);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-            {
-                return;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Staged-release cleanup tick failed");
-            }
+            if (stoppingToken.IsCancellationRequested) return;
+            await SafeTickAsync(stoppingToken);
+        }
+    }
+
+    private async Task SafeTickAsync(CancellationToken ct)
+    {
+        try
+        {
+            await TickAsync(ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // shutting down — no-op
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Staged-release cleanup tick failed");
         }
     }
 

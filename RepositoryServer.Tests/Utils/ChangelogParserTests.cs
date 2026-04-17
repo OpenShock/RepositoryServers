@@ -107,6 +107,89 @@ public class ChangelogParserTests
     }
 
     [Test]
+    [Arguments("### Info\n**Title** — content", "Title", "content")]
+    [Arguments("### Info\n**Title** – content", "Title", "content")]
+    [Arguments("### Info\n**Title** - content", "Title", "content")]
+    [Arguments("### Info\n**Title** -content", "Title", "content")]
+    public async Task Parse_SupportsMultipleTitleSeparators(string input, string expectedTitle, string expectedContent)
+    {
+        var result = ChangelogParser.Parse(input);
+        await Assert.That(result.IsT0).IsTrue();
+        var notes = result.AsT0;
+        await Assert.That(notes).HasCount(1);
+        await Assert.That(notes[0].Title).IsEqualTo(expectedTitle);
+        await Assert.That(notes[0].Content).IsEqualTo(expectedContent);
+    }
+
+    [Test]
+    public async Task Parse_IgnoresLinesBeforeFirstHeading()
+    {
+        var input = "Intro text we should ignore\n\n### Info\nActual content";
+        var result = ChangelogParser.Parse(input);
+
+        await Assert.That(result.IsT0).IsTrue();
+        var notes = result.AsT0;
+        await Assert.That(notes).HasCount(1);
+        await Assert.That(notes[0].Content).IsEqualTo("Actual content");
+    }
+
+    [Test]
+    public async Task Parse_HandlesCrlfLineEndings()
+    {
+        var input = "### Info\r\n- Fixed WiFi\r\n### Warning\r\nNeeds reset";
+        var result = ChangelogParser.Parse(input);
+
+        await Assert.That(result.IsT0).IsTrue();
+        var notes = result.AsT0;
+        await Assert.That(notes).HasCount(2);
+        await Assert.That(notes[0].Type).IsEqualTo("info");
+        await Assert.That(notes[0].Content).IsEqualTo("Fixed WiFi");
+        await Assert.That(notes[1].Type).IsEqualTo("warning");
+        await Assert.That(notes[1].Content).IsEqualTo("Needs reset");
+    }
+
+    [Test]
+    public async Task Parse_HeadingsAreCaseInsensitive()
+    {
+        var input = "### BREAKING\nFoo\n### warning\nBar\n### Info\nBaz";
+        var result = ChangelogParser.Parse(input);
+
+        await Assert.That(result.IsT0).IsTrue();
+        var notes = result.AsT0;
+        await Assert.That(notes).HasCount(3);
+        await Assert.That(notes[0].Type).IsEqualTo("breaking");
+        await Assert.That(notes[1].Type).IsEqualTo("warning");
+        await Assert.That(notes[2].Type).IsEqualTo("info");
+    }
+
+    [Test]
+    public async Task Parse_BulletsIgnoreNonBulletBodyInSameSection()
+    {
+        // If bullets are present, non-bullet lines in the section are dropped.
+        var input = "### Info\nThis text is ignored\n- Actual item 1\n- Actual item 2";
+        var result = ChangelogParser.Parse(input);
+
+        await Assert.That(result.IsT0).IsTrue();
+        var notes = result.AsT0;
+        await Assert.That(notes).HasCount(2);
+        await Assert.That(notes[0].Content).IsEqualTo("Actual item 1");
+        await Assert.That(notes[1].Content).IsEqualTo("Actual item 2");
+    }
+
+    [Test]
+    public async Task Parse_EmptyBoldTitle_FallsBackToLiteralContent()
+    {
+        var input = "### Info\n**** — still content";
+        var result = ChangelogParser.Parse(input);
+
+        await Assert.That(result.IsT0).IsTrue();
+        var notes = result.AsT0;
+        await Assert.That(notes).HasCount(1);
+        await Assert.That(notes[0].Title).IsNull();
+        await Assert.That(notes[0].Content).IsEqualTo("**** — still content");
+    }
+
+    [Test]
     public async Task Parse_SpecExample_MatchesGoldenStructure()
     {
         var input = string.Join("\n",

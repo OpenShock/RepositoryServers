@@ -249,3 +249,7 @@ app.MapControllers();
 app.MapScalarApiReference();
 
 app.Run();
+
+// Expose the auto-generated Program type so WebApplicationFactory<Program> in the
+// integration test project can bootstrap the host.
+public partial class Program { }
