@@ -106,11 +106,11 @@ public sealed class VersionsController : OpenShockControllerBase
         return Ok(FirmwareResponseMapper.ToReleaseDto(version, boards, cdnBase));
     }
 
-    [HttpGet("{firmwareVersion}/{boardId}")]
+    [HttpGet("{firmwareVersion}/{boardId:guid}")]
     [CacheControl(86400, immutable: true)]
     public async Task<IActionResult> GetVersionForBoard(
         [FromRoute] string firmwareVersion,
-        [FromRoute] string boardId,
+        [FromRoute] Guid boardId,
         CancellationToken ct)
     {
         var exists = await _db.FirmwareVersions.AnyAsync(v => v.Version == firmwareVersion, ct);

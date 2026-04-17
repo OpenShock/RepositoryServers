@@ -6,7 +6,7 @@ namespace OpenShock.RepositoryServer.RepoServerDb;
 /// </summary>
 public class FirmwareChipUsbDevice
 {
-    public string ChipId { get; set; } = null!;
+    public Guid ChipId { get; set; }
     public Guid UsbDeviceId { get; set; }
 
     public virtual FirmwareChip Chip { get; set; } = null!;

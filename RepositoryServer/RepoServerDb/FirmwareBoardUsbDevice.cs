@@ -6,7 +6,7 @@ namespace OpenShock.RepositoryServer.RepoServerDb;
 /// </summary>
 public class FirmwareBoardUsbDevice
 {
-    public string BoardId { get; set; } = null!;
+    public Guid BoardId { get; set; }
     public Guid UsbDeviceId { get; set; }
 
     public virtual FirmwareBoard Board { get; set; } = null!;

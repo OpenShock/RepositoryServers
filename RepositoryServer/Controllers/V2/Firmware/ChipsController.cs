@@ -25,7 +25,7 @@ public sealed class ChipsController : OpenShockControllerBase
     {
         var rows = await _db.FirmwareChips
             .Include(c => c.UsbDevices)
-            .OrderBy(c => c.Id)
+            .OrderBy(c => c.Name)
             .ToListAsync(ct);
 
         var chips = rows

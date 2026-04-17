@@ -22,7 +22,7 @@ public sealed class BoardsController : OpenShockControllerBase
     [HttpGet]
     [CacheControl(300)]
     public async Task<IActionResult> ListBoards(
-        [FromQuery] string? chipId,
+        [FromQuery] Guid? chipId,
         [FromQuery] bool includeDiscontinued = true,
         CancellationToken ct = default)
     {
@@ -30,9 +30,9 @@ public sealed class BoardsController : OpenShockControllerBase
             .Include(b => b.ChipNavigation)
             .Include(b => b.UsbDevices);
 
-        if (!string.IsNullOrWhiteSpace(chipId))
+        if (chipId is { } cid)
         {
-            query = query.Where(b => b.ChipId == chipId);
+            query = query.Where(b => b.ChipId == cid);
         }
 
         if (!includeDiscontinued)
@@ -40,7 +40,7 @@ public sealed class BoardsController : OpenShockControllerBase
             query = query.Where(b => !b.Discontinued);
         }
 
-        var rows = await query.OrderBy(b => b.Id).ToListAsync(ct);
+        var rows = await query.OrderBy(b => b.Name).ToListAsync(ct);
 
         var boards = rows
             .Select(b => new FirmwareBoardDto

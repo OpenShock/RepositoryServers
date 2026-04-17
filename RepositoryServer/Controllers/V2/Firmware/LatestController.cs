@@ -56,11 +56,11 @@ public sealed class LatestController : OpenShockControllerBase
         return Ok(FirmwareResponseMapper.ToReleaseDto(latest, boards, cdnBase));
     }
 
-    [HttpGet("{channel}/{boardId}")]
+    [HttpGet("{channel}/{boardId:guid}")]
     [CacheControl(300)]
     public async Task<IActionResult> GetLatestForBoard(
         [FromRoute] string channel,
-        [FromRoute] string boardId,
+        [FromRoute] Guid boardId,
         [FromQuery] string? version,
         CancellationToken ct)
     {

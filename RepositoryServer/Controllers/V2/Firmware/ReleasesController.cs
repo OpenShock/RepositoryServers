@@ -166,12 +166,12 @@ public class ReleasesController : OpenShockControllerBase
 
     // ---- Upload Board Artifacts ----
 
-    [HttpPut("{releaseId:guid}/boards/{boardId}")]
+    [HttpPut("{releaseId:guid}/boards/{boardId:guid}")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(64 * 1024 * 1024)]
     public async Task<IActionResult> UploadBoardArtifacts(
         [FromRoute] Guid releaseId,
-        [FromRoute] string boardId,
+        [FromRoute] Guid boardId,
         CancellationToken ct)
     {
         var release = await _db.FirmwareReleases.FirstOrDefaultAsync(r => r.Id == releaseId, ct);

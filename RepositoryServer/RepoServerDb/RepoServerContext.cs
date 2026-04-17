@@ -68,6 +68,7 @@ public partial class RepoServerContext : DbContext
             npgsqlBuilder.MapEnum<FirmwareChipArchitecture>();
             npgsqlBuilder.MapEnum<ReleaseStatus>();
             npgsqlBuilder.MapEnum<RepositoryProvider>();
+            npgsqlBuilder.MapEnum<AdvisorySeverity>();
         });
 
         optionsBuilder.UseExceptionProcessor();
@@ -106,6 +107,9 @@ public partial class RepoServerContext : DbContext
     public virtual DbSet<FirmwareChipUsbDevice> FirmwareChipUsbDevices { get; set; }
     public virtual DbSet<FirmwareBoardUsbDevice> FirmwareBoardUsbDevices { get; set; }
 
+    // Firmware advisories shown on the manifest endpoint
+    public virtual DbSet<FirmwareAdvisory> FirmwareAdvisories { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // PostgreSQL enum mappings
@@ -115,7 +119,8 @@ public partial class RepoServerContext : DbContext
             .HasPostgresEnum("firmware_release_note_type", ["warning", "info", "breaking", "section"])
             .HasPostgresEnum("firmware_chip_architecture", ["xtensa", "risc_v"])
             .HasPostgresEnum("release_status", ["staging", "editing", "published", "archived", "aborted"])
-            .HasPostgresEnum("repository_provider", ["github"]);
+            .HasPostgresEnum("repository_provider", ["github"])
+            .HasPostgresEnum("advisory_severity", ["critical", "warning", "info"]);
 
         // Shared source-code repository registry
         modelBuilder.Entity<SourceRepository>(entity =>
@@ -189,14 +194,16 @@ public partial class RepoServerContext : DbContext
             entity.HasKey(e => e.Id).HasName("firmware_chips_pkey");
             entity.ToTable("firmware_chips");
 
-            entity.Property(e => e.Id)
-                .HasMaxLength(32)
-                .HasColumnName("id");
+            entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.Name)
                 .HasMaxLength(64)
                 .HasColumnName("name");
             entity.Property(e => e.Architecture)
                 .HasColumnName("architecture");
+
+            entity.HasIndex(e => e.Name)
+                .IsUnique()
+                .HasDatabaseName("ix_firmware_chips_name");
         });
 
         modelBuilder.Entity<FirmwareBoard>(entity =>
@@ -204,12 +211,8 @@ public partial class RepoServerContext : DbContext
             entity.HasKey(e => e.Id).HasName("firmware_boards_pkey");
             entity.ToTable("firmware_boards");
 
-            entity.Property(e => e.Id)
-                .HasMaxLength(64)
-                .HasColumnName("id");
-            entity.Property(e => e.ChipId)
-                .HasMaxLength(32)
-                .HasColumnName("chip_id");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.ChipId).HasColumnName("chip_id");
             entity.Property(e => e.Name)
                 .HasMaxLength(128)
                 .HasColumnName("name");
@@ -223,6 +226,10 @@ public partial class RepoServerContext : DbContext
                 .HasForeignKey(d => d.ChipId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_firmware_boards_chip");
+
+            entity.HasIndex(e => e.Name)
+                .IsUnique()
+                .HasDatabaseName("ix_firmware_boards_name");
         });
 
         modelBuilder.Entity<FirmwareVersion>(entity =>
@@ -266,9 +273,7 @@ public partial class RepoServerContext : DbContext
             entity.Property(e => e.Version)
                 .HasMaxLength(64)
                 .HasColumnName("version");
-            entity.Property(e => e.BoardId)
-                .HasMaxLength(64)
-                .HasColumnName("board_id");
+            entity.Property(e => e.BoardId).HasColumnName("board_id");
             entity.Property(e => e.ArtifactType)
                 .HasColumnName("artifact_type");
             entity.Property(e => e.HashSha256)
@@ -360,9 +365,7 @@ public partial class RepoServerContext : DbContext
 
             entity.Property(e => e.ReleaseId)
                 .HasColumnName("release_id");
-            entity.Property(e => e.BoardId)
-                .HasMaxLength(64)
-                .HasColumnName("board_id");
+            entity.Property(e => e.BoardId).HasColumnName("board_id");
             entity.Property(e => e.ArtifactType)
                 .HasColumnName("artifact_type");
             entity.Property(e => e.HashSha256)
@@ -450,9 +453,23 @@ public partial class RepoServerContext : DbContext
                     joinEntity.HasKey(e => new { e.ChipId, e.UsbDeviceId })
                         .HasName("firmware_chip_usb_devices_pkey");
                     joinEntity.ToTable("firmware_chip_usb_devices");
-                    joinEntity.Property(e => e.ChipId).HasMaxLength(32).HasColumnName("chip_id");
+                    joinEntity.Property(e => e.ChipId).HasColumnName("chip_id");
                     joinEntity.Property(e => e.UsbDeviceId).HasColumnName("usb_device_id");
                 });
+
+        // Firmware advisories (manifest-facing, admin-managed)
+        modelBuilder.Entity<FirmwareAdvisory>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("firmware_advisories_pkey");
+            entity.ToTable("firmware_advisories");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Severity).HasColumnName("severity");
+            entity.Property(e => e.Title).HasMaxLength(256).HasColumnName("title");
+            entity.Property(e => e.Content).HasColumnName("content");
+            entity.Property(e => e.AffectedVersions).HasMaxLength(128).HasColumnName("affected_versions");
+            entity.Property(e => e.Url).HasMaxLength(512).HasColumnName("url");
+        });
 
         // Board ↔ UsbDevice M:N via FirmwareBoardUsbDevice junction
         modelBuilder.Entity<FirmwareBoard>()
@@ -474,7 +491,7 @@ public partial class RepoServerContext : DbContext
                     joinEntity.HasKey(e => new { e.BoardId, e.UsbDeviceId })
                         .HasName("firmware_board_usb_devices_pkey");
                     joinEntity.ToTable("firmware_board_usb_devices");
-                    joinEntity.Property(e => e.BoardId).HasMaxLength(64).HasColumnName("board_id");
+                    joinEntity.Property(e => e.BoardId).HasColumnName("board_id");
                     joinEntity.Property(e => e.UsbDeviceId).HasColumnName("usb_device_id");
                 });
     }

@@ -13,7 +13,7 @@ public class FirmwareRelease
     public string? RunId { get; set; }
     public DateTimeOffset ReleaseDate { get; set; }
     public ReleaseStatus Status { get; set; }
-    public string[] DeclaredBoards { get; set; } = [];
+    public Guid[] DeclaredBoards { get; set; } = [];
     public DateTimeOffset CreatedAt { get; set; }
 
     public virtual SourceRepository RepositoryNavigation { get; set; } = null!;

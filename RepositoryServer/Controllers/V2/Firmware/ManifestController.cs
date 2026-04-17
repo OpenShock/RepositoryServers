@@ -1,7 +1,6 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using OpenShock.RepositoryServer.Config;
 using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.Models.Firmware;
 using OpenShock.RepositoryServer.RepoServerDb;
@@ -22,12 +21,10 @@ public sealed class ManifestController : OpenShockControllerBase
     ];
 
     private readonly RepoServerContext _db;
-    private readonly ApiConfig _apiConfig;
 
-    public ManifestController(RepoServerContext db, ApiConfig apiConfig)
+    public ManifestController(RepoServerContext db)
     {
         _db = db;
-        _apiConfig = apiConfig;
     }
 
     [HttpGet]
@@ -54,12 +51,12 @@ public sealed class ManifestController : OpenShockControllerBase
         var boardRows = await _db.FirmwareBoards
             .Include(b => b.ChipNavigation)
             .Include(b => b.UsbDevices)
-            .OrderBy(b => b.Id)
+            .OrderBy(b => b.Name)
             .ToListAsync(ct);
 
         var chipRows = await _db.FirmwareChips
             .Include(c => c.UsbDevices)
-            .OrderBy(c => c.Id)
+            .OrderBy(c => c.Name)
             .ToListAsync(ct);
 
         var filterRows = await _db.UsbSerialFilters
@@ -104,16 +101,18 @@ public sealed class ManifestController : OpenShockControllerBase
             })
             .ToList();
 
-        var advisories = _apiConfig.Firmware.Advisories
+        var advisories = await _db.FirmwareAdvisories
+            .OrderBy(a => a.Severity)
+            .ThenBy(a => a.Title)
             .Select(a => new FirmwareAdvisoryDto
             {
-                Severity = a.Severity,
+                Severity = a.Severity.ToString().ToLowerInvariant(),
                 Title = a.Title,
                 Content = a.Content,
                 AffectedVersions = a.AffectedVersions,
                 Url = a.Url
             })
-            .ToList();
+            .ToListAsync(ct);
 
         var response = new FirmwareManifestResponse
         {

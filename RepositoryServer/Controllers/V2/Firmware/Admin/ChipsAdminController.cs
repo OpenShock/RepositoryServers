@@ -1,5 +1,4 @@
 using Asp.Versioning;
-using FlexLabs.EntityFrameworkCore.Upsert;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -23,9 +22,8 @@ public class ChipsAdminController : OpenShockControllerBase
         _db = db;
     }
 
-    [HttpPut("{chipId}")]
-    public async Task<IActionResult> UpsertChip(
-        [FromRoute] string chipId,
+    [HttpPost]
+    public async Task<IActionResult> CreateChip(
         [FromBody] CreateFirmwareChipRequest request,
         CancellationToken ct)
     {
@@ -41,19 +39,48 @@ public class ChipsAdminController : OpenShockControllerBase
 
         var chip = new FirmwareChip
         {
-            Id = chipId,
+            Id = Guid.NewGuid(),
             Name = request.Name,
             Architecture = architecture
         };
 
-        var executed = await _db.FirmwareChips.Upsert(chip).On(c => c.Id).RunAsync(ct);
-        if (executed <= 0) throw new Exception("Failed to upsert firmware chip");
+        _db.FirmwareChips.Add(chip);
+        await _db.SaveChangesAsync(ct);
 
-        return Created();
+        return Created((string?)null, new { id = chip.Id });
     }
 
-    [HttpDelete("{chipId}")]
-    public async Task<IActionResult> DeleteChip([FromRoute] string chipId, CancellationToken ct)
+    [HttpPut("{chipId:guid}")]
+    public async Task<IActionResult> UpdateChip(
+        [FromRoute] Guid chipId,
+        [FromBody] CreateFirmwareChipRequest request,
+        CancellationToken ct)
+    {
+        FirmwareChipArchitecture? architecture = null;
+        if (request.Architecture is not null)
+        {
+            if (!Enum.TryParse<FirmwareChipArchitecture>(request.Architecture, true, out var parsed))
+            {
+                return Problem(FirmwareError.FirmwareInvalidArchitecture);
+            }
+            architecture = parsed;
+        }
+
+        var chip = await _db.FirmwareChips.FirstOrDefaultAsync(c => c.Id == chipId, ct);
+        if (chip is null)
+        {
+            return Problem(FirmwareError.FirmwareChipNotFound);
+        }
+
+        chip.Name = request.Name;
+        chip.Architecture = architecture;
+        await _db.SaveChangesAsync(ct);
+
+        return Ok();
+    }
+
+    [HttpDelete("{chipId:guid}")]
+    public async Task<IActionResult> DeleteChip([FromRoute] Guid chipId, CancellationToken ct)
     {
         if (await _db.FirmwareBoards.AnyAsync(b => b.ChipId == chipId, ct))
         {
@@ -69,9 +96,9 @@ public class ChipsAdminController : OpenShockControllerBase
         return NoContent();
     }
 
-    [HttpPut("{chipId}/usb-devices/{usbDeviceId:guid}")]
+    [HttpPut("{chipId:guid}/usb-devices/{usbDeviceId:guid}")]
     public async Task<IActionResult> AttachUsbDevice(
-        [FromRoute] string chipId,
+        [FromRoute] Guid chipId,
         [FromRoute] Guid usbDeviceId,
         CancellationToken ct)
     {
@@ -100,9 +127,9 @@ public class ChipsAdminController : OpenShockControllerBase
         return NoContent();
     }
 
-    [HttpDelete("{chipId}/usb-devices/{usbDeviceId:guid}")]
+    [HttpDelete("{chipId:guid}/usb-devices/{usbDeviceId:guid}")]
     public async Task<IActionResult> DetachUsbDevice(
-        [FromRoute] string chipId,
+        [FromRoute] Guid chipId,
         [FromRoute] Guid usbDeviceId,
         CancellationToken ct)
     {

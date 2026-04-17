@@ -21,7 +21,7 @@ public static class FirmwareResponseMapper
     {
         var boardLookup = boardsById.ToDictionary(b => b.Id);
 
-        var boardMap = new Dictionary<string, FirmwareBoardDetailDto>();
+        var boardMap = new Dictionary<Guid, FirmwareBoardDetailDto>();
         foreach (var artifact in version.Artifacts)
         {
             if (!boardLookup.TryGetValue(artifact.BoardId, out var board))

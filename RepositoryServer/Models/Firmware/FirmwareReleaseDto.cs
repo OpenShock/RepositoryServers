@@ -11,5 +11,5 @@ public sealed record FirmwareReleaseDto
     public required DateTimeOffset ReleaseDate { get; init; }
     public required FirmwareSourceDto Source { get; init; }
     public required List<FirmwareReleaseNoteDto> ReleaseNotes { get; init; }
-    public required Dictionary<string, FirmwareBoardDetailDto> Boards { get; init; }
+    public required Dictionary<Guid, FirmwareBoardDetailDto> Boards { get; init; }
 }

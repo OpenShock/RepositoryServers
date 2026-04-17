@@ -7,6 +7,6 @@ namespace OpenShock.RepositoryServer.Models.Firmware;
 public sealed record FirmwareBoardReleaseResponseDto
 {
     public required string Version { get; init; }
-    public required string BoardId { get; init; }
+    public required Guid BoardId { get; init; }
     public required List<FirmwareArtifactDto> Artifacts { get; init; }
 }

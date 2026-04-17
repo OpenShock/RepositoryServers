@@ -22,9 +22,11 @@ public class BoardsAdminController : OpenShockControllerBase
         _db = db;
     }
 
-    [HttpPut("{boardId}")]
-    public async Task<IActionResult> UpsertBoard(
-        [FromRoute] string boardId,
+    /// <summary>
+    /// Create a new board. <c>Name</c> is the unique identifier visible to clients.
+    /// </summary>
+    [HttpPost]
+    public async Task<IActionResult> CreateBoard(
         [FromBody] CreateFirmwareBoardRequest request,
         CancellationToken ct)
     {
@@ -33,46 +35,58 @@ public class BoardsAdminController : OpenShockControllerBase
             return Problem(FirmwareError.FirmwareChipNotFound);
         }
 
-        var requiredArtifactTypes = Array.Empty<FirmwareArtifactType>();
-        if (request.RequiredArtifactTypes is { Count: > 0 })
+        if (!TryParseRequiredArtifactTypes(request.RequiredArtifactTypes, out var requiredArtifactTypes))
         {
-            var parsed = new List<FirmwareArtifactType>();
-            foreach (var typeStr in request.RequiredArtifactTypes)
-            {
-                if (!Enum.TryParse<FirmwareArtifactType>(typeStr, true, out var artifactType))
-                {
-                    return Problem(FirmwareError.FirmwareInvalidArtifactType);
-                }
-                parsed.Add(artifactType);
-            }
-            requiredArtifactTypes = parsed.Distinct().ToArray();
+            return Problem(FirmwareError.FirmwareInvalidArtifactType);
         }
 
-        var existing = await _db.FirmwareBoards.FirstOrDefaultAsync(b => b.Id == boardId, ct);
-        if (existing is not null)
+        var board = new FirmwareBoard
         {
-            existing.Name = request.Name;
-            existing.ChipId = request.ChipId;
-            existing.RequiredArtifactTypes = requiredArtifactTypes;
-        }
-        else
-        {
-            _db.FirmwareBoards.Add(new FirmwareBoard
-            {
-                Id = boardId,
-                Name = request.Name,
-                ChipId = request.ChipId,
-                Discontinued = false,
-                RequiredArtifactTypes = requiredArtifactTypes
-            });
-        }
+            Id = Guid.NewGuid(),
+            Name = request.Name,
+            ChipId = request.ChipId,
+            Discontinued = false,
+            RequiredArtifactTypes = requiredArtifactTypes
+        };
 
+        _db.FirmwareBoards.Add(board);
         await _db.SaveChangesAsync(ct);
-        return Created();
+
+        return Created((string?)null, new { id = board.Id });
     }
 
-    [HttpPatch("{boardId}/discontinue")]
-    public async Task<IActionResult> DiscontinueBoard([FromRoute] string boardId, CancellationToken ct)
+    [HttpPut("{boardId:guid}")]
+    public async Task<IActionResult> UpdateBoard(
+        [FromRoute] Guid boardId,
+        [FromBody] CreateFirmwareBoardRequest request,
+        CancellationToken ct)
+    {
+        if (!await _db.FirmwareChips.AnyAsync(c => c.Id == request.ChipId, ct))
+        {
+            return Problem(FirmwareError.FirmwareChipNotFound);
+        }
+
+        if (!TryParseRequiredArtifactTypes(request.RequiredArtifactTypes, out var requiredArtifactTypes))
+        {
+            return Problem(FirmwareError.FirmwareInvalidArtifactType);
+        }
+
+        var board = await _db.FirmwareBoards.FirstOrDefaultAsync(b => b.Id == boardId, ct);
+        if (board is null)
+        {
+            return Problem(FirmwareError.FirmwareBoardNotFound);
+        }
+
+        board.Name = request.Name;
+        board.ChipId = request.ChipId;
+        board.RequiredArtifactTypes = requiredArtifactTypes;
+
+        await _db.SaveChangesAsync(ct);
+        return Ok();
+    }
+
+    [HttpPatch("{boardId:guid}/discontinue")]
+    public async Task<IActionResult> DiscontinueBoard([FromRoute] Guid boardId, CancellationToken ct)
     {
         var board = await _db.FirmwareBoards.FirstOrDefaultAsync(b => b.Id == boardId, ct);
         if (board is null)
@@ -85,8 +99,8 @@ public class BoardsAdminController : OpenShockControllerBase
         return Ok();
     }
 
-    [HttpDelete("{boardId}")]
-    public async Task<IActionResult> DeleteBoard([FromRoute] string boardId, CancellationToken ct)
+    [HttpDelete("{boardId:guid}")]
+    public async Task<IActionResult> DeleteBoard([FromRoute] Guid boardId, CancellationToken ct)
     {
         if (await _db.FirmwareArtifacts.AnyAsync(a => a.BoardId == boardId, ct))
         {
@@ -102,9 +116,9 @@ public class BoardsAdminController : OpenShockControllerBase
         return NoContent();
     }
 
-    [HttpPut("{boardId}/usb-devices/{usbDeviceId:guid}")]
+    [HttpPut("{boardId:guid}/usb-devices/{usbDeviceId:guid}")]
     public async Task<IActionResult> AttachUsbDevice(
-        [FromRoute] string boardId,
+        [FromRoute] Guid boardId,
         [FromRoute] Guid usbDeviceId,
         CancellationToken ct)
     {
@@ -133,9 +147,9 @@ public class BoardsAdminController : OpenShockControllerBase
         return NoContent();
     }
 
-    [HttpDelete("{boardId}/usb-devices/{usbDeviceId:guid}")]
+    [HttpDelete("{boardId:guid}/usb-devices/{usbDeviceId:guid}")]
     public async Task<IActionResult> DetachUsbDevice(
-        [FromRoute] string boardId,
+        [FromRoute] Guid boardId,
         [FromRoute] Guid usbDeviceId,
         CancellationToken ct)
     {
@@ -144,5 +158,28 @@ public class BoardsAdminController : OpenShockControllerBase
             .ExecuteDeleteAsync(ct);
 
         return NoContent();
+    }
+
+    private static bool TryParseRequiredArtifactTypes(List<string>? raw, out FirmwareArtifactType[] parsed)
+    {
+        if (raw is null || raw.Count == 0)
+        {
+            parsed = Array.Empty<FirmwareArtifactType>();
+            return true;
+        }
+
+        var list = new List<FirmwareArtifactType>(raw.Count);
+        foreach (var typeStr in raw)
+        {
+            if (!Enum.TryParse<FirmwareArtifactType>(typeStr, true, out var t))
+            {
+                parsed = Array.Empty<FirmwareArtifactType>();
+                return false;
+            }
+            list.Add(t);
+        }
+
+        parsed = list.Distinct().ToArray();
+        return true;
     }
 }

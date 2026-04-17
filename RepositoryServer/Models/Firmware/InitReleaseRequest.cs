@@ -15,7 +15,7 @@ public sealed class InitReleaseRequest
 
     [Required]
     [MinLength(1)]
-    public required List<string> Boards { get; init; }
+    public required List<Guid> Boards { get; init; }
 
     /// <summary>
     /// Markdown changelog per firmware-api-spec.md §5.3. The server parses this into

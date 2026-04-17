@@ -4,9 +4,14 @@ namespace OpenShock.RepositoryServer.RepoServerDb;
 
 public class FirmwareBoard
 {
-    public string Id { get; set; } = null!;
-    public string ChipId { get; set; } = null!;
+    public Guid Id { get; set; }
+
+    /// <summary>
+    /// Human-readable board name (e.g. <c>"OpenShock Core V1"</c>). Unique.
+    /// </summary>
     public string Name { get; set; } = null!;
+
+    public Guid ChipId { get; set; }
     public bool Discontinued { get; set; }
     public FirmwareArtifactType[] RequiredArtifactTypes { get; set; } = [];
 

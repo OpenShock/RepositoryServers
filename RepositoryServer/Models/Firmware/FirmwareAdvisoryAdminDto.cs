@@ -1,11 +1,12 @@
 namespace OpenShock.RepositoryServer.Models.Firmware;
 
 /// <summary>
-/// Security / compatibility advisory exposed on the manifest endpoint. Served from the
-/// <c>firmware_advisories</c> table; managed via <c>/v2/firmware/admin/advisories</c>.
+/// Admin-facing advisory shape — identical to the public shape plus the database id.
+/// Returned by the admin CRUD endpoints only.
 /// </summary>
-public sealed record FirmwareAdvisoryDto
+public sealed record FirmwareAdvisoryAdminDto
 {
+    public required Guid Id { get; init; }
     public required string Severity { get; init; }
     public required string Title { get; init; }
     public required string Content { get; init; }

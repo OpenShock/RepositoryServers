@@ -6,6 +6,6 @@ namespace OpenShock.RepositoryServer.Models.Firmware;
 /// </summary>
 public sealed record FirmwareChipRefDto
 {
-    public required string Id { get; init; }
+    public required Guid Id { get; init; }
     public required string Name { get; init; }
 }

@@ -17,10 +17,4 @@ public sealed class FirmwareConfig
     /// How long a release may remain in <c>editing</c> status before the cleanup job aborts it.
     /// </summary>
     public TimeSpan EditingReleaseTtl { get; init; } = TimeSpan.FromDays(7);
-
-    /// <summary>
-    /// Security / compatibility advisories exposed on the manifest endpoint.
-    /// Served from configuration, not from the database.
-    /// </summary>
-    public List<FirmwareAdvisoryConfig> Advisories { get; init; } = new();
 }

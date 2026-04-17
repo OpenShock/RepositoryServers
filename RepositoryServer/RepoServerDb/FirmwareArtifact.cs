@@ -1,11 +1,11 @@
-﻿using OpenShock.RepositoryServer.Enums;
+using OpenShock.RepositoryServer.Enums;
 
 namespace OpenShock.RepositoryServer.RepoServerDb;
 
 public class FirmwareArtifact
 {
     public string Version { get; set; } = null!;
-    public string BoardId { get; set; } = null!;
+    public Guid BoardId { get; set; }
     public FirmwareArtifactType ArtifactType { get; set; }
     public byte[] HashSha256 { get; set; } = null!;
     public long FileSize { get; set; }

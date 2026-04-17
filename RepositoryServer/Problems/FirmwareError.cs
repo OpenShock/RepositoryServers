@@ -13,7 +13,7 @@ public static class FirmwareError
     public static OpenShockProblem FirmwareInvalidArchitecture => new("Firmware.InvalidArchitecture", "The architecture provided is not valid");
     public static OpenShockProblem FirmwareBoardInUse => new("Firmware.BoardInUse", "Cannot delete board that has associated artifacts", HttpStatusCode.Conflict);
     public static OpenShockProblem FirmwareChipInUse => new("Firmware.ChipInUse", "Cannot delete chip that has associated boards", HttpStatusCode.Conflict);
-    public static OpenShockProblem FirmwareMissingRequiredArtifacts(string boardId, IEnumerable<string> missing) =>
+    public static OpenShockProblem FirmwareMissingRequiredArtifacts(Guid boardId, IEnumerable<string> missing) =>
         new("Firmware.MissingRequiredArtifacts", $"Board '{boardId}' is missing required artifact types: {string.Join(", ", missing)}");
     public static OpenShockProblem FirmwareArtifactNotFound => new("Firmware.ArtifactNotFound", "The referenced firmware artifact was not found", HttpStatusCode.NotFound);
 
@@ -23,7 +23,7 @@ public static class FirmwareError
     public static OpenShockProblem FirmwareReleaseAlreadyStaging => new("Firmware.ReleaseAlreadyStaging", "A staging release for this version already exists", HttpStatusCode.Conflict);
     public static OpenShockProblem FirmwareReleaseBoardsEmpty => new("Firmware.ReleaseBoardsEmpty", "At least one board must be declared for a release");
     public static OpenShockProblem FirmwareBoardNotDeclared => new("Firmware.BoardNotDeclared", "The board was not declared in the release init");
-    public static OpenShockProblem FirmwareReleaseIncomplete(IEnumerable<string> missingBoards) =>
+    public static OpenShockProblem FirmwareReleaseIncomplete(IEnumerable<Guid> missingBoards) =>
         new("Firmware.ReleaseIncomplete", $"Not all declared boards have been uploaded. Missing: {string.Join(", ", missingBoards)}");
 
     public static OpenShockProblem FirmwareInvalidChangelog(string reason) =>
@@ -41,4 +41,7 @@ public static class FirmwareError
     public static OpenShockProblem FirmwareUsbDeviceNotFound => new("Firmware.UsbDeviceNotFound", "The referenced USB device was not found", HttpStatusCode.NotFound);
     public static OpenShockProblem FirmwareUsbDeviceInUse => new("Firmware.UsbDeviceInUse", "Cannot delete USB device that is still linked to a chip or board", HttpStatusCode.Conflict);
     public static OpenShockProblem FirmwareUsbSerialFilterNotFound => new("Firmware.UsbSerialFilterNotFound", "The referenced USB serial filter was not found", HttpStatusCode.NotFound);
+
+    public static OpenShockProblem FirmwareAdvisoryNotFound => new("Firmware.AdvisoryNotFound", "The referenced firmware advisory was not found", HttpStatusCode.NotFound);
+    public static OpenShockProblem FirmwareInvalidAdvisorySeverity => new("Firmware.InvalidAdvisorySeverity", "The advisory severity provided is not valid");
 }
