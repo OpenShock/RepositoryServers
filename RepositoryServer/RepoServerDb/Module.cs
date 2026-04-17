@@ -1,3 +1,6 @@
+﻿using System;
+using System.Collections.Generic;
+
 namespace OpenShock.RepositoryServer.RepoServerDb;
 
 public partial class Module
@@ -8,7 +11,7 @@ public partial class Module
 
     public string Description { get; set; } = null!;
 
-    public Uri? SourceUrl { get; set; }
+    public Uri? SourceUrl { get; set; } = null!;
 
     public Uri? IconUrl { get; set; }
 
