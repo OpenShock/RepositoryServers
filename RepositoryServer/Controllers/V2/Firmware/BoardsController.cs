@@ -1,8 +1,9 @@
-﻿using Asp.Versioning;
+using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OpenShock.RepositoryServer.Models.Firmware;
 using OpenShock.RepositoryServer.RepoServerDb;
+using OpenShock.RepositoryServer.Utils;
 
 namespace OpenShock.RepositoryServer.Controllers.V2.Firmware;
 
@@ -19,9 +20,15 @@ public sealed class BoardsController : OpenShockControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> ListBoards([FromQuery] string? chipId, [FromQuery] bool includeDiscontinued = false)
+    [CacheControl(300)]
+    public async Task<IActionResult> ListBoards(
+        [FromQuery] string? chipId,
+        [FromQuery] bool includeDiscontinued = true,
+        CancellationToken ct = default)
     {
-        IQueryable<FirmwareBoard> query = _db.FirmwareBoards.Include(b => b.ChipNavigation);
+        IQueryable<FirmwareBoard> query = _db.FirmwareBoards
+            .Include(b => b.ChipNavigation)
+            .Include(b => b.UsbDevices);
 
         if (!string.IsNullOrWhiteSpace(chipId))
         {
@@ -33,16 +40,21 @@ public sealed class BoardsController : OpenShockControllerBase
             query = query.Where(b => !b.Discontinued);
         }
 
-        var boards = await query
+        var rows = await query.OrderBy(b => b.Id).ToListAsync(ct);
+
+        var boards = rows
             .Select(b => new FirmwareBoardDto
             {
                 Id = b.Id,
                 Name = b.Name,
                 ChipId = b.ChipId,
                 ChipName = b.ChipNavigation.Name,
-                Discontinued = b.Discontinued
+                Discontinued = b.Discontinued,
+                UsbDevices = b.UsbDevices
+                    .Select(d => new FirmwareUsbDeviceDto { Id = d.Id, Vid = d.Vid, Pid = d.Pid, Name = d.Name })
+                    .ToList()
             })
-            .ToListAsync();
+            .ToList();
 
         return Ok(boards);
     }

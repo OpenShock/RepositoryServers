@@ -1,4 +1,4 @@
-﻿using OpenShock.RepositoryServer.Enums;
+using OpenShock.RepositoryServer.Enums;
 
 namespace OpenShock.RepositoryServer.RepoServerDb;
 
@@ -12,4 +12,5 @@ public class FirmwareBoard
 
     public virtual FirmwareChip ChipNavigation { get; set; } = null!;
     public virtual ICollection<FirmwareArtifact> Artifacts { get; set; } = new List<FirmwareArtifact>();
+    public virtual ICollection<UsbDevice> UsbDevices { get; set; } = new List<UsbDevice>();
 }

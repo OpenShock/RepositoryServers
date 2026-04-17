@@ -1,8 +1,10 @@
 namespace OpenShock.RepositoryServer.Enums;
 
-public enum FirmwareReleaseStatus
+public enum ReleaseStatus
 {
     Staging,
+    Editing,
     Published,
+    Archived,
     Aborted
 }

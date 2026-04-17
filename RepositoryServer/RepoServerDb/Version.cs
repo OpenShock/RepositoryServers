@@ -1,6 +1,3 @@
-﻿using System;
-using System.Collections.Generic;
-
 namespace OpenShock.RepositoryServer.RepoServerDb;
 
 public partial class Version

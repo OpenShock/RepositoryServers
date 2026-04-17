@@ -3,6 +3,7 @@
     <AssemblyName>OpenShock.RepositoryServer</AssemblyName>
     <RootNamespace>OpenShock.RepositoryServer</RootNamespace>
     <Product>RepositoryServer</Product>
+    <LangVersion>default</LangVersion>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />

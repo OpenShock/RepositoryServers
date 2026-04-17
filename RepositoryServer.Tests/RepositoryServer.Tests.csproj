@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
-    <LangVersion>13</LangVersion>
+    <LangVersion>default</LangVersion>
     <AssemblyName>OpenShock.RepositoryServer.Tests</AssemblyName>
     <RootNamespace>OpenShock.RepositoryServer.Tests</RootNamespace>
     <Company>OpenShock.RepositoryServer.Tests</Company>
@@ -13,5 +13,8 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="TUnit" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\RepositoryServer\RepositoryServer.csproj" />
   </ItemGroup>
 </Project>

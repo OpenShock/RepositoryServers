@@ -1,5 +1,4 @@
-﻿using System.Net;
-using System.Security.Claims;
+using System.Net;
 using System.Text.Json;
 using Asp.Versioning;
 using EntityFramework.Exceptions.PostgreSQL;
@@ -21,7 +20,7 @@ using Serilog;
 using ValidationProblem = OpenShock.RepositoryServer.Problems.ValidationProblem;
 
 var builder = WebApplication.CreateSlimBuilder(args);
-        
+
 builder.Configuration.Sources.Clear();
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
@@ -41,7 +40,7 @@ builder.Host.UseDefaultServiceProvider((_, options) =>
 
 // Since we use slim builders, this allows for HTTPS
 builder.WebHost.UseKestrelHttpsConfiguration();
-        
+
 builder.WebHost.ConfigureKestrel(serverOptions =>
 {
     serverOptions.Limits.RequestHeadersTimeout = TimeSpan.FromMilliseconds(3000);
@@ -59,38 +58,7 @@ builder.Services.AddAuthentication()
         AuthSchemas.AdminToken, _ => { })
     .AddJwtBearer(AuthSchemas.CiCdToken, options =>
     {
-        options.Authority = "https://token.actions.githubusercontent.com";
-        options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidIssuer = "https://token.actions.githubusercontent.com",
-            ValidateAudience = true,
-            ValidAudience = config.CiCd.Audience,
-            ValidateLifetime = true,
-        };
-        options.Events = new JwtBearerEvents
-        {
-            OnTokenValidated = context =>
-            {
-                var owner = context.Principal?.FindFirstValue("repository_owner");
-                if (!string.Equals(owner, config.CiCd.RepositoryOwner, StringComparison.OrdinalIgnoreCase))
-                {
-                    context.Fail("Repository owner is not allowed.");
-                    return Task.CompletedTask;
-                }
-
-                if (config.CiCd.AllowedRepositories is { Count: > 0 })
-                {
-                    var repo = context.Principal?.FindFirstValue("repository");
-                    if (repo == null || !config.CiCd.AllowedRepositories.Contains(repo, StringComparer.OrdinalIgnoreCase))
-                    {
-                        context.Fail("Repository is not allowed.");
-                    }
-                }
-
-                return Task.CompletedTask;
-            }
-        };
+        GitHubOidcAuthentication.Configure(options, config.Firmware.CiCd.Audience);
     });
 
 builder.Services.AddAuthorization();
@@ -193,6 +161,12 @@ switch (config.Firmware.Storage.Type)
         throw new InvalidOperationException($"Unknown storage type: {config.Firmware.Storage.Type}");
 }
 
+// <---- Discord notifications ---->
+builder.Services.AddHttpClient<IDiscordNotificationService, DiscordNotificationService>();
+
+// <---- Background cleanup ---->
+builder.Services.AddHostedService<StagedReleaseCleanupService>();
+
 // <---- Postgres EF Core ---->
 
 builder.Services.AddDbContextPool<RepoServerContext>(dbBuilder =>
@@ -213,10 +187,10 @@ if (!config.Db.SkipMigration)
 {
     Log.Information("Running database migrations...");
     using var scope = app.Services.CreateScope();
-    
+
     await using var migrationContext = new MigrationOpenShockContext(
         config.Db.Conn,
-        config.Db.Debug, 
+        config.Db.Debug,
         scope.ServiceProvider.GetRequiredService<ILoggerFactory>());
     var pendingMigrations = migrationContext.Database.GetPendingMigrations().ToArray();
 
@@ -250,7 +224,7 @@ app.UseExceptionHandler();
 
 // global cors policy
 app.UseCors();
-        
+
 app.UseWebSockets(new WebSocketOptions
 {
     KeepAliveInterval = TimeSpan.FromMinutes(1)
@@ -260,11 +234,11 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 var metricsAllowedIpNetworks = config.Metrics.AllowedNetworks.Select(IPNetwork.Parse);
-        
+
 app.UseOpenTelemetryPrometheusScrapingEndpoint(context =>
 {
     if(context.Request.Path != "/metrics") return false;
-            
+
     var remoteIp = context.Connection.RemoteIpAddress;
     return remoteIp != null && metricsAllowedIpNetworks.Any(x => x.Contains(remoteIp));
 });

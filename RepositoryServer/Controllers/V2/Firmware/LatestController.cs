@@ -25,62 +25,86 @@ public sealed class LatestController : OpenShockControllerBase
     }
 
     [HttpGet("{channel}")]
-    public async Task<IActionResult> GetLatest([FromRoute] string channel, [FromQuery] string? board)
+    [CacheControl(300)]
+    public async Task<IActionResult> GetLatest([FromRoute] string channel, CancellationToken ct)
     {
         if (!Enum.TryParse<ReleaseChannel>(channel, true, out var firmwareChannel))
         {
             return Problem(FirmwareError.FirmwareInvalidChannel);
         }
 
-        var query = _db.FirmwareVersions
+        var latest = await _db.FirmwareVersions
             .Where(v => v.Channel == firmwareChannel)
-            .OrderByDescending(v => v.ReleaseDate);
+            .OrderByDescending(v => v.ReleaseDate)
+            .Include(v => v.RepositoryNavigation)
+            .Include(v => v.Artifacts)
+            .Include(v => v.ReleaseNotes)
+            .FirstOrDefaultAsync(ct);
 
-        FirmwareVersion? latestVersion;
-        if (!string.IsNullOrWhiteSpace(board))
-        {
-            latestVersion = await query
-                .Include(v => v.Artifacts.Where(a => a.BoardId == board))
-                .FirstOrDefaultAsync();
-        }
-        else
-        {
-            latestVersion = await query
-                .Include(v => v.Artifacts)
-                .FirstOrDefaultAsync();
-        }
-
-        if (latestVersion == null)
+        if (latest is null)
         {
             return Problem(FirmwareError.FirmwareVersionNotFound);
         }
 
+        var boardIds = latest.Artifacts.Select(a => a.BoardId).Distinct().ToList();
+        var boards = await _db.FirmwareBoards
+            .Include(b => b.ChipNavigation)
+            .Where(b => boardIds.Contains(b.Id))
+            .ToListAsync(ct);
+
         var cdnBase = _apiConfig.Firmware.CdnBaseUrl.TrimEnd('/');
-        var artifacts = new Dictionary<string, List<FirmwareArtifactDto>>();
+        return Ok(FirmwareResponseMapper.ToReleaseDto(latest, boards, cdnBase));
+    }
 
-        foreach (var artifact in latestVersion.Artifacts)
+    [HttpGet("{channel}/{boardId}")]
+    [CacheControl(300)]
+    public async Task<IActionResult> GetLatestForBoard(
+        [FromRoute] string channel,
+        [FromRoute] string boardId,
+        [FromQuery] string? version,
+        CancellationToken ct)
+    {
+        if (!Enum.TryParse<ReleaseChannel>(channel, true, out var firmwareChannel))
         {
-            if (!artifacts.TryGetValue(artifact.BoardId, out var list))
-            {
-                list = new List<FirmwareArtifactDto>();
-                artifacts[artifact.BoardId] = list;
-            }
-
-            list.Add(new FirmwareArtifactDto
-            {
-                Type = artifact.ArtifactType.ToString().ToLowerInvariant(),
-                Url = $"{cdnBase}/{latestVersion.Version}/{artifact.BoardId}/{FirmwareArtifactFileNames.GetFileName(artifact.ArtifactType)}",
-                Sha256Hash = Convert.ToHexString(artifact.HashSha256),
-                FileSize = artifact.FileSize
-            });
+            return Problem(FirmwareError.FirmwareInvalidChannel);
         }
 
-        return Ok(new FirmwareLatestResponse
+        var latestVersion = await _db.FirmwareVersions
+            .Where(v => v.Channel == firmwareChannel)
+            .OrderByDescending(v => v.ReleaseDate)
+            .Select(v => v.Version)
+            .FirstOrDefaultAsync(ct);
+
+        if (latestVersion is null)
         {
-            Version = latestVersion.Version,
-            Channel = latestVersion.Channel.ToString().ToLowerInvariant(),
-            ReleaseDate = latestVersion.ReleaseDate,
+            return Problem(FirmwareError.FirmwareVersionNotFound);
+        }
+
+        // String equality (not semver) is intentional: rollbacks — if a version is pulled
+        // and an older version becomes "latest", the hub's string compare will still differ
+        // and trigger an update. See firmware-api-spec.md §4.2.
+        if (!string.IsNullOrWhiteSpace(version) && string.Equals(version, latestVersion, StringComparison.Ordinal))
+        {
+            return NoContent();
+        }
+
+        var artifacts = await _db.FirmwareArtifacts
+            .Where(a => a.Version == latestVersion && a.BoardId == boardId)
+            .ToListAsync(ct);
+
+        if (artifacts.Count == 0)
+        {
+            return Problem(FirmwareError.FirmwareBoardNotFound);
+        }
+
+        var cdnBase = _apiConfig.Firmware.CdnBaseUrl.TrimEnd('/');
+        return Ok(new FirmwareBoardReleaseResponseDto
+        {
+            Version = latestVersion,
+            BoardId = boardId,
             Artifacts = artifacts
+                .Select(a => FirmwareResponseMapper.ToArtifactDto(a, latestVersion, cdnBase))
+                .ToList()
         });
     }
 }
