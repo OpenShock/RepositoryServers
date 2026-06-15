@@ -24,6 +24,7 @@ public sealed class RepoController : OpenShockControllerBase
         _apiConfig = apiConfig;
     }
     
+    [HttpGet]
     public async Task<IActionResult> GetRepo()
     {
         var moduleRaw = await _db.Modules.Include(x => x.Versions).ToArrayAsync();
