@@ -95,7 +95,7 @@ builder.Services.AddWebEncoders();
 builder.Services.AddProblemDetails();
 builder.Services.TryAddSingleton<TimeProvider>(provider => TimeProvider.System);
 
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi("1");
 
 builder.Services.AddCors(options =>
 {
@@ -213,6 +213,6 @@ app.UseOpenTelemetryPrometheusScrapingEndpoint(context =>
 app.MapOpenApi();
 app.MapControllers();
 
-app.MapScalarApiReference();
+app.MapScalarApiReference(options => options.AddDocument("1"));
 
 app.Run();
