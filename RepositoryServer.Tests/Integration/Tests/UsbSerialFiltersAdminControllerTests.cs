@@ -84,7 +84,7 @@ public class UsbSerialFiltersAdminControllerTests
 
         var body = await client.GetFromJsonAsync<List<FirmwareUsbSerialFilterAdminDto>>(BasePath);
         await Assert.That(body).IsNotNull();
-        await Assert.That(body!).HasCount(3);
+        await Assert.That(body!).Count().IsEqualTo(3);
     }
 
     [Test]

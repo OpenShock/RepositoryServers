@@ -117,7 +117,7 @@ public class ManifestControllerTests
         var manifest = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         var boards = manifest.GetProperty("boards").EnumerateArray().ToList();
-        await Assert.That(boards).HasCount(1);
+        await Assert.That(boards).Count().IsEqualTo(1);
         await Assert.That(Guid.Parse(boards[0].GetProperty("id").GetString()!))
             .IsEqualTo(boardId);
         await Assert.That(boards[0].GetProperty("name").GetString()).IsEqualTo("OpenShock Core V1");
@@ -125,30 +125,30 @@ public class ManifestControllerTests
         await Assert.That(boards[0].GetProperty("discontinued").GetBoolean()).IsFalse();
 
         var boardUsb = boards[0].GetProperty("usbDevices").EnumerateArray().ToList();
-        await Assert.That(boardUsb).HasCount(1);
+        await Assert.That(boardUsb).Count().IsEqualTo(1);
         await Assert.That(boardUsb[0].GetProperty("vid").GetInt32()).IsEqualTo(0x1A86);
         await Assert.That(boardUsb[0].GetProperty("pid").GetInt32()).IsEqualTo(0x7522);
         await Assert.That(boardUsb[0].GetProperty("name").GetString()).IsEqualTo("CH9102");
 
         var chips = manifest.GetProperty("chips").EnumerateArray().ToList();
-        await Assert.That(chips).HasCount(1);
+        await Assert.That(chips).Count().IsEqualTo(1);
         await Assert.That(chips[0].GetProperty("name").GetString()).IsEqualTo("ESP32-S3");
         await Assert.That(chips[0].GetProperty("architecture").GetString()).IsEqualTo("xtensa");
 
         var filters = manifest.GetProperty("usbSerialFilters").EnumerateArray().ToList();
-        await Assert.That(filters).HasCount(1);
+        await Assert.That(filters).Count().IsEqualTo(1);
         await Assert.That(filters[0].GetProperty("vid").GetInt32()).IsEqualTo(0x1A86);
         var filterHasPid = filters[0].TryGetProperty("pid", out var pidProp) &&
                            pidProp.ValueKind != JsonValueKind.Null;
         await Assert.That(filterHasPid).IsFalse();
 
         var devices = manifest.GetProperty("usbDevices").EnumerateArray().ToList();
-        await Assert.That(devices).HasCount(1);
+        await Assert.That(devices).Count().IsEqualTo(1);
         await Assert.That(Guid.Parse(devices[0].GetProperty("id").GetString()!))
             .IsEqualTo(usbDeviceId);
 
         var advisories = manifest.GetProperty("advisories").EnumerateArray().ToList();
-        await Assert.That(advisories).HasCount(1);
+        await Assert.That(advisories).Count().IsEqualTo(1);
         await Assert.That(advisories[0].GetProperty("severity").GetString()).IsEqualTo("critical");
         await Assert.That(advisories[0].GetProperty("affectedVersions").GetString()).IsEqualTo("<1.4.0");
     }

@@ -86,7 +86,7 @@ public class AdvisoriesAdminControllerTests
 
         var body = await response.Content.ReadFromJsonAsync<List<FirmwareAdvisoryAdminDto>>();
         await Assert.That(body).IsNotNull();
-        await Assert.That(body!).HasCount(3);
+        await Assert.That(body!).Count().IsEqualTo(3);
 
         // Ordered by severity rank: Critical (0), Warning (1), Info (2).
         await Assert.That(body[0].Severity).IsEqualTo("critical");
@@ -175,7 +175,7 @@ public class AdvisoriesAdminControllerTests
         var manifest = await publicClient.GetFromJsonAsync<JsonElement>("/v2/firmware/manifest");
         var advisories = manifest.GetProperty("advisories").EnumerateArray().ToList();
 
-        await Assert.That(advisories).HasCount(1);
+        await Assert.That(advisories).Count().IsEqualTo(1);
         await Assert.That(advisories[0].GetProperty("title").GetString()).IsEqualTo("FYI");
         // Manifest DTO does not expose id — check the fields that are public.
         await Assert.That(advisories[0].TryGetProperty("id", out _)).IsFalse();

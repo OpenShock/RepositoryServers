@@ -44,7 +44,7 @@ public class ChangelogParserTests
 
         await Assert.That(result.IsT0).IsTrue();
         var notes = result.AsT0;
-        await Assert.That(notes).HasCount(3);
+        await Assert.That(notes).Count().IsEqualTo(3);
         await Assert.That(notes[0].Type).IsEqualTo("breaking");
         await Assert.That(notes[1].Type).IsEqualTo("warning");
         await Assert.That(notes[2].Type).IsEqualTo("info");
@@ -58,7 +58,7 @@ public class ChangelogParserTests
 
         await Assert.That(result.IsT0).IsTrue();
         var notes = result.AsT0;
-        await Assert.That(notes).HasCount(2);
+        await Assert.That(notes).Count().IsEqualTo(2);
         await Assert.That(notes[0].Type).IsEqualTo("section");
         await Assert.That(notes[0].Title).IsEqualTo("Features");
         await Assert.That(notes[0].Content).IsEqualTo("New dashboard");
@@ -74,7 +74,7 @@ public class ChangelogParserTests
 
         await Assert.That(result.IsT0).IsTrue();
         var notes = result.AsT0;
-        await Assert.That(notes).HasCount(1);
+        await Assert.That(notes).Count().IsEqualTo(1);
         await Assert.That(notes[0].Type).IsEqualTo("breaking");
         await Assert.That(notes[0].Title).IsEqualTo("Config format");
         await Assert.That(notes[0].Content).IsEqualTo("Changed to TOML");
@@ -88,7 +88,7 @@ public class ChangelogParserTests
 
         await Assert.That(result.IsT0).IsTrue();
         var notes = result.AsT0;
-        await Assert.That(notes).HasCount(1);
+        await Assert.That(notes).Count().IsEqualTo(1);
         await Assert.That(notes[0].Content).IsEqualTo("Line one\nLine two");
     }
 
@@ -100,7 +100,7 @@ public class ChangelogParserTests
 
         await Assert.That(result.IsT0).IsTrue();
         var notes = result.AsT0;
-        await Assert.That(notes).HasCount(1);
+        await Assert.That(notes).Count().IsEqualTo(1);
         await Assert.That(notes[0].Type).IsEqualTo("info");
         await Assert.That(notes[0].Title).IsNull();
         await Assert.That(notes[0].Content).IsEqualTo("Fixed WiFi reconnection");
@@ -116,7 +116,7 @@ public class ChangelogParserTests
         var result = ChangelogParser.Parse(input);
         await Assert.That(result.IsT0).IsTrue();
         var notes = result.AsT0;
-        await Assert.That(notes).HasCount(1);
+        await Assert.That(notes).Count().IsEqualTo(1);
         await Assert.That(notes[0].Title).IsEqualTo(expectedTitle);
         await Assert.That(notes[0].Content).IsEqualTo(expectedContent);
     }
@@ -129,7 +129,7 @@ public class ChangelogParserTests
 
         await Assert.That(result.IsT0).IsTrue();
         var notes = result.AsT0;
-        await Assert.That(notes).HasCount(1);
+        await Assert.That(notes).Count().IsEqualTo(1);
         await Assert.That(notes[0].Content).IsEqualTo("Actual content");
     }
 
@@ -141,7 +141,7 @@ public class ChangelogParserTests
 
         await Assert.That(result.IsT0).IsTrue();
         var notes = result.AsT0;
-        await Assert.That(notes).HasCount(2);
+        await Assert.That(notes).Count().IsEqualTo(2);
         await Assert.That(notes[0].Type).IsEqualTo("info");
         await Assert.That(notes[0].Content).IsEqualTo("Fixed WiFi");
         await Assert.That(notes[1].Type).IsEqualTo("warning");
@@ -156,7 +156,7 @@ public class ChangelogParserTests
 
         await Assert.That(result.IsT0).IsTrue();
         var notes = result.AsT0;
-        await Assert.That(notes).HasCount(3);
+        await Assert.That(notes).Count().IsEqualTo(3);
         await Assert.That(notes[0].Type).IsEqualTo("breaking");
         await Assert.That(notes[1].Type).IsEqualTo("warning");
         await Assert.That(notes[2].Type).IsEqualTo("info");
@@ -171,7 +171,7 @@ public class ChangelogParserTests
 
         await Assert.That(result.IsT0).IsTrue();
         var notes = result.AsT0;
-        await Assert.That(notes).HasCount(2);
+        await Assert.That(notes).Count().IsEqualTo(2);
         await Assert.That(notes[0].Content).IsEqualTo("Actual item 1");
         await Assert.That(notes[1].Content).IsEqualTo("Actual item 2");
     }
@@ -184,7 +184,7 @@ public class ChangelogParserTests
 
         await Assert.That(result.IsT0).IsTrue();
         var notes = result.AsT0;
-        await Assert.That(notes).HasCount(1);
+        await Assert.That(notes).Count().IsEqualTo(1);
         await Assert.That(notes[0].Title).IsNull();
         await Assert.That(notes[0].Content).IsEqualTo("**** — still content");
     }
@@ -211,7 +211,7 @@ public class ChangelogParserTests
 
         await Assert.That(result.IsT0).IsTrue();
         var notes = result.AsT0;
-        await Assert.That(notes).HasCount(7);
+        await Assert.That(notes).Count().IsEqualTo(7);
 
         await Assert.That(notes[0].Type).IsEqualTo("breaking");
         await Assert.That(notes[0].Title).IsEqualTo("Config format");

@@ -44,7 +44,7 @@ public class PublicBoardsAndChipsControllerTests
         var boardsForChipA = await client.GetFromJsonAsync<List<FirmwareBoardDto>>(
             $"/v2/firmware/boards?chipId={chipAId}");
         await Assert.That(boardsForChipA).IsNotNull();
-        await Assert.That(boardsForChipA!).HasCount(1);
+        await Assert.That(boardsForChipA!).Count().IsEqualTo(1);
         await Assert.That(boardsForChipA[0].ChipId).IsEqualTo(chipAId);
     }
 
@@ -75,8 +75,8 @@ public class PublicBoardsAndChipsControllerTests
         var withoutDiscontinued = await client.GetFromJsonAsync<List<FirmwareBoardDto>>(
             "/v2/firmware/boards?includeDiscontinued=false");
 
-        await Assert.That(withDiscontinued!).HasCount(2);
-        await Assert.That(withoutDiscontinued!).HasCount(1);
+        await Assert.That(withDiscontinued!).Count().IsEqualTo(2);
+        await Assert.That(withoutDiscontinued!).Count().IsEqualTo(1);
         await Assert.That(withoutDiscontinued![0].Name).IsEqualTo("Active");
     }
 
@@ -98,7 +98,7 @@ public class PublicBoardsAndChipsControllerTests
         using var client = Factory.CreateClient();
         var chips = await client.GetFromJsonAsync<List<FirmwareChipDto>>("/v2/firmware/chips");
         await Assert.That(chips).IsNotNull();
-        await Assert.That(chips!).HasCount(1);
+        await Assert.That(chips!).Count().IsEqualTo(1);
         await Assert.That(chips[0].Name).IsEqualTo("ESP32-C6");
         await Assert.That(chips[0].Architecture).IsEqualTo("risc_v");
     }

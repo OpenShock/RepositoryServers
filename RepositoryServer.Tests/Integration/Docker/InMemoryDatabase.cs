@@ -16,8 +16,7 @@ public sealed class InMemoryDatabase : IAsyncInitializer, IAsyncDisposable
     {
         get
         {
-            _container ??= new PostgreSqlBuilder()
-                .WithImage("postgres:17-alpine")
+            _container ??= new PostgreSqlBuilder("postgres:17-alpine")
                 .WithName($"repo-server-tests-pg-{Guid.NewGuid():N}")
                 .WithDatabase("repo_server_tests")
                 .WithUsername("repo_server")

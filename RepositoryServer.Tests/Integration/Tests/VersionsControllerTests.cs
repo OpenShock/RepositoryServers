@@ -59,7 +59,7 @@ public class VersionsControllerTests
         await Assert.That(body.GetProperty("total").GetInt32()).IsEqualTo(1);
         var versions = body.GetProperty("versions").EnumerateArray()
             .Select(v => v.GetProperty("version").GetString()).ToList();
-        await Assert.That(versions).HasCount(1);
+        await Assert.That(versions).Count().IsEqualTo(1);
         await Assert.That(versions[0]).IsEqualTo("1.5.0");
     }
 

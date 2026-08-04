@@ -118,7 +118,7 @@ public class UsbDevicesAdminControllerTests
 
         var devices = await client.GetFromJsonAsync<List<FirmwareUsbDeviceDto>>(BasePath);
         await Assert.That(devices).IsNotNull();
-        await Assert.That(devices!).HasCount(3);
+        await Assert.That(devices!).Count().IsEqualTo(3);
         await Assert.That(devices[0].Vid).IsEqualTo(0x0403);
         await Assert.That(devices[1].Vid).IsEqualTo(0x10C4);
         await Assert.That(devices[2].Vid).IsEqualTo(0x1A86);

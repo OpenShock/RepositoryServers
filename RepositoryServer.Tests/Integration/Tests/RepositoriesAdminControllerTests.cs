@@ -24,7 +24,7 @@ public class RepositoriesAdminControllerTests
         using var client = Factory.CreateAdminClient();
         var repos = await client.GetFromJsonAsync<List<RepositoryDto>>(BasePath);
         await Assert.That(repos).IsNotNull();
-        await Assert.That(repos!).HasCount(0);
+        await Assert.That(repos!).Count().IsEqualTo(0);
     }
 
     [Test]
@@ -49,7 +49,7 @@ public class RepositoriesAdminControllerTests
         using var client = Factory.CreateAdminClient();
         var repos = await client.GetFromJsonAsync<List<RepositoryDto>>(BasePath);
         await Assert.That(repos).IsNotNull();
-        await Assert.That(repos!).HasCount(1);
+        await Assert.That(repos!).Count().IsEqualTo(1);
         await Assert.That(repos[0].Id).IsEqualTo(repoId);
         await Assert.That(repos[0].Provider).IsEqualTo("github");
         await Assert.That(repos[0].Owner).IsEqualTo("openshock");
