@@ -101,7 +101,10 @@ public sealed class ManifestController : OpenShockControllerBase
             })
             .ToList();
 
-        var advisories = await _db.FirmwareAdvisories
+        // Postgres sorts enum columns by label creation order (alphabetical with MapEnum),
+        // not severity rank — order on the CLR enum value in memory instead.
+        var advisoryRows = await _db.FirmwareAdvisories.ToListAsync(ct);
+        var advisories = advisoryRows
             .OrderBy(a => a.Severity)
             .ThenBy(a => a.Title)
             .Select(a => new FirmwareAdvisoryDto
@@ -112,7 +115,7 @@ public sealed class ManifestController : OpenShockControllerBase
                 AffectedVersions = a.AffectedVersions,
                 Url = a.Url
             })
-            .ToListAsync(ct);
+            .ToList();
 
         var response = new FirmwareManifestResponse
         {

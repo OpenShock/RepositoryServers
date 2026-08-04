@@ -48,12 +48,14 @@ public class AdvisoriesController : OpenShockControllerBase
     [HttpGet]
     public async Task<IActionResult> ListAdvisories(CancellationToken ct)
     {
-        var rows = await _db.FirmwareAdvisories
+        // Postgres sorts enum columns by label creation order (alphabetical with MapEnum),
+        // not severity rank — order on the CLR enum value in memory instead.
+        var rows = await _db.FirmwareAdvisories.ToListAsync(ct);
+
+        return Ok(rows
             .OrderBy(a => a.Severity)
             .ThenBy(a => a.Title)
-            .ToListAsync(ct);
-
-        return Ok(rows.Select(ToDto));
+            .Select(ToDto));
     }
 
     [HttpPut("{id:guid}")]

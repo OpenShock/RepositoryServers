@@ -88,7 +88,7 @@ public class AdvisoriesAdminControllerTests
         await Assert.That(body).IsNotNull();
         await Assert.That(body!).HasCount(3);
 
-        // Ordered by the PG enum ordinal: Critical (0), Warning (1), Info (2).
+        // Ordered by severity rank: Critical (0), Warning (1), Info (2).
         await Assert.That(body[0].Severity).IsEqualTo("critical");
         await Assert.That(body[1].Severity).IsEqualTo("warning");
         await Assert.That(body[2].Severity).IsEqualTo("info");

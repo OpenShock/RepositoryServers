@@ -30,8 +30,7 @@ public sealed class MigrationOpenShockContext : RepoServerContext
     {
         if (_migrationTool)
         {
-            // Migration tooling: plain connection string, no MapEnum (to avoid duplicate enum schemas)
-            optionsBuilder.UseNpgsql("Host=localhost;Database=repo-server;Username=openshock;Password=openshock");
+            optionsBuilder.UseNpgsql("Host=localhost;Database=repo-server;Username=openshock;Password=openshock", MapEnums);
             optionsBuilder.UseExceptionProcessor();
             optionsBuilder.EnableSensitiveDataLogging();
             optionsBuilder.EnableDetailedErrors();
@@ -57,19 +56,28 @@ public partial class RepoServerContext : DbContext
     {
     }
 
+    /// <summary>
+    /// Single source of truth for PostgreSQL enum mappings. Since Npgsql 9, MapEnum also
+    /// injects the enum definitions into the EF model, so no HasPostgresEnum calls may
+    /// coexist with these — that duplicates the definitions and breaks type mapping.
+    /// Names are pinned explicitly because they don't all match the default translation
+    /// (firmware_release_note_type vs. ReleaseNoteSectionType).
+    /// </summary>
+    protected static void MapEnums(Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.NpgsqlDbContextOptionsBuilder npgsqlBuilder)
+    {
+        npgsqlBuilder.MapEnum<ReleaseChannel>("release_channel");
+        npgsqlBuilder.MapEnum<FirmwareArtifactType>("firmware_artifact_type");
+        npgsqlBuilder.MapEnum<ReleaseNoteSectionType>("firmware_release_note_type");
+        npgsqlBuilder.MapEnum<FirmwareChipArchitecture>("firmware_chip_architecture");
+        npgsqlBuilder.MapEnum<ReleaseStatus>("release_status");
+        npgsqlBuilder.MapEnum<RepositoryProvider>("repository_provider");
+        npgsqlBuilder.MapEnum<AdvisorySeverity>("advisory_severity");
+    }
+
     public static void ConfigureOptionsBuilder(DbContextOptionsBuilder optionsBuilder, string connectionString,
         bool debug)
     {
-        optionsBuilder.UseNpgsql(connectionString, npgsqlBuilder =>
-        {
-            npgsqlBuilder.MapEnum<ReleaseChannel>();
-            npgsqlBuilder.MapEnum<FirmwareArtifactType>();
-            npgsqlBuilder.MapEnum<ReleaseNoteSectionType>();
-            npgsqlBuilder.MapEnum<FirmwareChipArchitecture>();
-            npgsqlBuilder.MapEnum<ReleaseStatus>();
-            npgsqlBuilder.MapEnum<RepositoryProvider>();
-            npgsqlBuilder.MapEnum<AdvisorySeverity>();
-        });
+        optionsBuilder.UseNpgsql(connectionString, MapEnums);
 
         optionsBuilder.UseExceptionProcessor();
 
@@ -112,16 +120,6 @@ public partial class RepoServerContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // PostgreSQL enum mappings
-        modelBuilder
-            .HasPostgresEnum("release_channel", ["stable", "beta", "develop"])
-            .HasPostgresEnum("firmware_artifact_type", ["merged", "app", "bootloader", "partitions", "static_fs"])
-            .HasPostgresEnum("firmware_release_note_type", ["warning", "info", "breaking", "section"])
-            .HasPostgresEnum("firmware_chip_architecture", ["xtensa", "risc_v"])
-            .HasPostgresEnum("release_status", ["staging", "editing", "published", "archived", "aborted"])
-            .HasPostgresEnum("repository_provider", ["github"])
-            .HasPostgresEnum("advisory_severity", ["critical", "warning", "info"]);
-
         // Shared source-code repository registry
         modelBuilder.Entity<SourceRepository>(entity =>
         {

@@ -88,26 +88,32 @@ public sealed class WebApplicationFactory
     {
         builder.UseEnvironment("Testing");
 
-        builder.ConfigureAppConfiguration((_, cfg) =>
+        // Program.cs reads and validates ApiConfig BEFORE builder.Build(). For minimal-hosting
+        // apps, ConfigureAppConfiguration overlays are only applied at Build() time — too late.
+        // UseSetting goes through host configuration, which the deferred host builder flattens
+        // into command-line args for Program.Main, so Program's `.AddCommandLine(args)` picks
+        // these up before the config is validated.
+        var settings = new Dictionary<string, string?>
         {
-            cfg.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                ["Db:Conn"] = PostgreSql.Container.GetConnectionString(),
-                ["Db:SkipMigration"] = "true",
-                ["Db:Debug"] = "false",
+            ["Db:Conn"] = PostgreSql.Container.GetConnectionString(),
+            ["Db:SkipMigration"] = "true",
+            ["Db:Debug"] = "false",
 
-                ["AdminToken"] = TestAdminToken.Value,
+            ["AdminToken"] = TestAdminToken.Value,
 
-                ["Repo:CdnBaseUrl"] = "https://cdn-test.openshock.example/repo",
+            ["Repo:CdnBaseUrl"] = "https://cdn-test.openshock.example/repo",
 
-                ["Firmware:CdnBaseUrl"] = "https://cdn-test.openshock.example/firmware",
-                ["Firmware:CiCd:Audience"] = "openshock-repository-server-test",
-                ["Firmware:Storage:Type"] = "Local",
-                ["Firmware:Storage:Local:BasePath"] = _cdnStoragePath,
-                ["Firmware:StagedReleaseTtl"] = "01:00:00",
-                ["Firmware:EditingReleaseTtl"] = "7.00:00:00",
-            });
-        });
+            ["Firmware:CdnBaseUrl"] = "https://cdn-test.openshock.example/firmware",
+            ["Firmware:CiCd:Audience"] = "openshock-repository-server-test",
+            ["Firmware:Storage:Type"] = "Local",
+            ["Firmware:Storage:Local:BasePath"] = _cdnStoragePath,
+            ["Firmware:StagedReleaseTtl"] = "01:00:00",
+            ["Firmware:EditingReleaseTtl"] = "7.00:00:00",
+        };
+        foreach (var (key, value) in settings)
+        {
+            builder.UseSetting(key, value);
+        }
 
         builder.ConfigureTestServices(services =>
         {

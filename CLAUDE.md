@@ -134,6 +134,8 @@ docker/
 
 ## Commands
 - Build: `dotnet build RepositoryServer/RepositoryServer.csproj`
-- Test: `dotnet test RepositoryServer.Tests/RepositoryServer.Tests.csproj`
+- Test: `dotnet test --project RepositoryServer.Tests/RepositoryServer.Tests.csproj`
+  (Microsoft.Testing.Platform runner, opted in via `global.json`; the legacy positional
+  project path is rejected — use `--project`)
 - Docker: `docker build -f docker/RepositoryServer.Dockerfile .`
 - Migration: `dotnet ef migrations add <Name> --project RepositoryServer`

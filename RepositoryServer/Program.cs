@@ -169,15 +169,16 @@ builder.Services.AddHostedService<StagedReleaseCleanupService>();
 
 // <---- Postgres EF Core ---->
 
-builder.Services.AddDbContextPool<RepoServerContext>(dbBuilder =>
-{
-    RepoServerContext.ConfigureOptionsBuilder(dbBuilder, config.Db.Conn, config.Db.Debug);
-});
-
+// Register the pooled factory only and derive scoped contexts from it. Adding
+// AddDbContextPool alongside would apply a second options configuration to the same
+// options builder (EF applies all registered configurations cumulatively), duplicating
+// the Npgsql enum definitions and breaking type mapping.
 builder.Services.AddPooledDbContextFactory<RepoServerContext>(dbBuilder =>
 {
     RepoServerContext.ConfigureOptionsBuilder(dbBuilder, config.Db.Conn, config.Db.Debug);
 });
+builder.Services.AddScoped(sp =>
+    sp.GetRequiredService<IDbContextFactory<RepoServerContext>>().CreateDbContext());
 
 
 
