@@ -427,8 +427,12 @@ public partial class RepoServerContext : DbContext
             entity.Property(e => e.Pid).HasColumnName("pid");
             entity.Property(e => e.Description).HasMaxLength(256).HasColumnName("description");
 
-            // NOTE: unique (vid, pid) with NULLS NOT DISTINCT — declared via raw SQL in the
-            // FirmwareV2Redesign migration (EF Core has no fluent shortcut).
+            // Unique (vid, pid) with NULLS NOT DISTINCT so at most one vendor-wide
+            // (pid IS NULL) filter can exist per vid. Requires PostgreSQL 15+.
+            entity.HasIndex(e => new { e.Vid, e.Pid })
+                .IsUnique()
+                .AreNullsDistinct(false)
+                .HasDatabaseName("ix_usb_serial_filters_vid_pid");
         });
 
         // Chip ↔ UsbDevice M:N via FirmwareChipUsbDevice junction

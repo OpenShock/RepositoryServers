@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using OpenShock.RepositoryServer.RepoServerDb;
 using OpenShock.RepositoryServer.Services;
 using OpenShock.RepositoryServer.Tests.Integration.Docker;
@@ -18,9 +19,8 @@ namespace OpenShock.RepositoryServer.Tests.Integration;
 ///     (overrides db connection, admin token, local storage path, and forces skip-migration)
 ///   * removes the <see cref="StagedReleaseCleanupService"/> hosted service so it doesn't
 ///     race the schema creation inside <see cref="InitializeAsync"/>
-///   * calls <see cref="DatabaseFacade.EnsureCreatedAsync"/> to build the schema from the
-///     current EF model — no real migrations are run because the project doesn't ship
-///     firmware migrations yet
+///   * applies the real EF migrations (via <see cref="MigrationOpenShockContext"/>, the
+///     context the migrations are attributed to) so the suite validates them
 /// </summary>
 public sealed class WebApplicationFactory
     : Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactory<Program>, IAsyncInitializer
@@ -36,8 +36,10 @@ public sealed class WebApplicationFactory
         _ = Server; // force the host to build
 
         await using var scope = Services.CreateAsyncScope();
-        var db = scope.ServiceProvider.GetRequiredService<RepoServerContext>();
-        await db.Database.EnsureCreatedAsync();
+        var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
+        await using var migrationContext = new MigrationOpenShockContext(
+            PostgreSql.Container.GetConnectionString(), debug: false, loggerFactory);
+        await migrationContext.Database.MigrateAsync();
     }
 
     /// <summary>
