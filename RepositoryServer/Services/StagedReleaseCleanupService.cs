@@ -118,11 +118,11 @@ public sealed class StagedReleaseCleanupService : BackgroundService
                     continue;
                 }
 
-                foreach (var artifact in release.StagedArtifacts)
-                {
-                    var cdnPath = FirmwareArtifactFileNames.BuildStoragePath(release.Version, artifact.BoardId, artifact.ArtifactType);
-                    await _storage.DeleteFileAsync(cdnPath, ct);
-                }
+                // Only ever touches this release's own staging prefix. Published artifacts live under
+                // {version}/... and are unreachable from here by construction, so an expiring release
+                // can never delete bytes a live version is serving.
+                await _storage.DeleteDirectoryAsync(
+                    FirmwareArtifactFileNames.BuildStagingPrefix(release.Id), ct);
 
                 // release.Status is still the pre-abort value — ExecuteUpdate bypasses the change
                 // tracker — which is what makes it possible to tell from the log which TTL fired.

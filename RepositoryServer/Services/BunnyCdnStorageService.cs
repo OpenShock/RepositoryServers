@@ -30,6 +30,19 @@ public sealed class BunnyCdnStorageService : IStorageService
     }
 
     /// <inheritdoc />
+    public async Task CopyFileAsync(string sourcePath, string destinationPath, CancellationToken cancellationToken = default)
+    {
+        // The Bunny storage API has no server-side copy, so the object is streamed back through the
+        // server. Firmware artifacts are a few MB, and this runs once per artifact at publish.
+        var response = await _httpClient.GetAsync(
+            $"{_storageUrl}/{sourcePath}", HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        response.EnsureSuccessStatusCode();
+
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        await UploadFileAsync(destinationPath, stream, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task DeleteFileAsync(string path, CancellationToken cancellationToken = default)
     {
         var url = $"{_storageUrl}/{path}";

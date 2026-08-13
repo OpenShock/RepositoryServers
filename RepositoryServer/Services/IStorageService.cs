@@ -11,6 +11,19 @@ public interface IStorageService
     Task UploadFileAsync(string path, Stream content, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Copies a file within storage, overwriting the destination.
+    /// </summary>
+    /// <remarks>
+    /// Used to promote a staged artifact to its public key at publish time. Artifacts are uploaded
+    /// under a staging prefix and only appear at their published path when the release is published,
+    /// so a live key is written exactly once and never by an in-progress release.
+    /// </remarks>
+    /// <param name="sourcePath">Existing path relative to storage root.</param>
+    /// <param name="destinationPath">Path to copy to, relative to storage root.</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task CopyFileAsync(string sourcePath, string destinationPath, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Deletes a file from storage.
     /// </summary>
     /// <param name="path">Path relative to storage root, e.g. "1.0.0/board-name/app.bin"</param>

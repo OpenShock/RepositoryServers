@@ -39,19 +39,22 @@ public class ReleasesController : OpenShockControllerBase
     private readonly ApiConfig _apiConfig;
     private readonly IDiscordNotificationService _discord;
     private readonly TimeProvider _timeProvider;
+    private readonly ILogger<ReleasesController> _logger;
 
     public ReleasesController(
         RepoServerContext db,
         IStorageService storage,
         ApiConfig apiConfig,
         IDiscordNotificationService discord,
-        TimeProvider timeProvider)
+        TimeProvider timeProvider,
+        ILogger<ReleasesController> logger)
     {
         _db = db;
         _storage = storage;
         _apiConfig = apiConfig;
         _discord = discord;
         _timeProvider = timeProvider;
+        _logger = logger;
     }
 
     // ---- Init Release ----
@@ -335,18 +338,19 @@ public class ReleasesController : OpenShockControllerBase
 
         await using var uploadTransaction = await _db.Database.BeginTransactionAsync(ct);
 
-        // Replacing this board's staged rows. Uploads overwrite at the same deterministic keys, so a
-        // re-upload of the same board never leaves a stale blob behind.
+        // Replacing this board's staged rows. Uploads overwrite at the same deterministic staging
+        // keys, so a re-upload of the same board never leaves a stale blob behind.
         await _db.FirmwareStagedArtifacts
             .Where(a => a.ReleaseId == releaseId && a.BoardId == boardId)
             .ExecuteDeleteAsync(ct);
 
         foreach (var (artifactType, bytes, hash) in verified)
         {
-            var cdnPath = FirmwareArtifactFileNames.BuildStoragePath(release.Version, boardId, artifactType);
+            // Staged, not published: the public key is written only by PublishRelease.
+            var stagingPath = FirmwareArtifactFileNames.BuildStagingPath(releaseId, boardId, artifactType);
 
             await using var uploadStream = new MemoryStream(bytes);
-            await _storage.UploadFileAsync(cdnPath, uploadStream, ct);
+            await _storage.UploadFileAsync(stagingPath, uploadStream, ct);
 
             _db.FirmwareStagedArtifacts.Add(new FirmwareStagedArtifact
             {
@@ -434,6 +438,36 @@ public class ReleasesController : OpenShockControllerBase
             }
         }
 
+        // Promote staged objects to their published keys before touching the database.
+        //
+        // Storage is not transactional, so one of the two orderings has to carry the risk. Copying
+        // first means a later database failure leaves unreferenced objects at published keys, which
+        // are invisible (no version row points at them) and are overwritten by a subsequent publish
+        // of the same version. Committing first would instead publish a version whose artifacts are
+        // not all present yet — hubs would download 404s. Unreferenced bytes beat a broken release.
+        var promoted = new List<string>();
+        try
+        {
+            foreach (var staged in release.StagedArtifacts)
+            {
+                var stagingPath = FirmwareArtifactFileNames.BuildStagingPath(
+                    release.Id, staged.BoardId, staged.ArtifactType);
+                var publishedPath = FirmwareArtifactFileNames.BuildStoragePath(
+                    release.Version, staged.BoardId, staged.ArtifactType);
+
+                await _storage.CopyFileAsync(stagingPath, publishedPath, ct);
+                promoted.Add(publishedPath);
+            }
+        }
+        catch (Exception ex)
+        {
+            // Roll back the partial promotion so a half-populated version directory is not left
+            // behind. Best effort: if this fails too, the objects stay unreferenced and harmless.
+            _logger.LogError(ex, "Failed to promote staged artifacts for release {ReleaseId}", release.Id);
+            await TryDeleteAllAsync(promoted, ct);
+            throw;
+        }
+
         await using var transaction = await _db.Database.BeginTransactionAsync(ct);
 
         var versionEntity = new FirmwareVersion
@@ -476,8 +510,29 @@ public class ReleasesController : OpenShockControllerBase
 
         release.Status = ReleaseStatus.Published;
 
-        await _db.SaveChangesAsync(ct);
-        await transaction.CommitAsync(ct);
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+        }
+        catch
+        {
+            await TryDeleteAllAsync(promoted, ct);
+            throw;
+        }
+
+        // The release is live; its staging copies are now dead weight. Deleting them is best effort —
+        // failing here would abort a publish that has already succeeded, and the TTL job does not
+        // revisit published releases, so the worst case is some orphaned staging objects.
+        try
+        {
+            await _storage.DeleteDirectoryAsync(FirmwareArtifactFileNames.BuildStagingPrefix(release.Id), ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Published release {ReleaseId} but failed to clear its staging prefix", release.Id);
+        }
 
         await _discord.NotifyFirmwareReleasePublishedAsync(
             release.Version,
@@ -516,11 +571,9 @@ public class ReleasesController : OpenShockControllerBase
             return Problem(FirmwareError.FirmwareReleaseNotEditable);
         }
 
-        foreach (var artifact in release.StagedArtifacts)
-        {
-            var cdnPath = FirmwareArtifactFileNames.BuildStoragePath(release.Version, artifact.BoardId, artifact.ArtifactType);
-            await _storage.DeleteFileAsync(cdnPath, ct);
-        }
+        // Everything this release wrote lives under its own staging prefix, so it can be dropped
+        // wholesale with no risk of deleting an object a published version is serving.
+        await _storage.DeleteDirectoryAsync(FirmwareArtifactFileNames.BuildStagingPrefix(release.Id), ct);
 
         release.Status = ReleaseStatus.Aborted;
         await _db.SaveChangesAsync(ct);
@@ -531,6 +584,25 @@ public class ReleasesController : OpenShockControllerBase
     // ---- Helpers ----
 
     private readonly record struct SourceClaims(Guid RepositoryId, string CommitHash, string? Ref, string? RunId);
+
+    /// <summary>
+    /// Best-effort deletion used to unwind a partial promotion. Never throws: it runs on paths that
+    /// are already failing, and turning a cleanup error into the reported fault would hide the cause.
+    /// </summary>
+    private async Task TryDeleteAllAsync(IEnumerable<string> paths, CancellationToken ct)
+    {
+        foreach (var path in paths)
+        {
+            try
+            {
+                await _storage.DeleteFileAsync(path, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to remove promoted artifact {Path} while unwinding", path);
+            }
+        }
+    }
 
     /// <summary>
     /// True when the failure is the partial unique index guarding one open release per version.

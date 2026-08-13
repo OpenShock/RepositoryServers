@@ -761,6 +761,16 @@ Content-Type: multipart/form-data
 
 Accepts uploads in both `staging` and `editing` status. Form fields: `app`, `staticfs`, `merged`, `bootloader`, `partitions` — each a binary file. Must include all artifact types required by the board's `requiredArtifactTypes` configuration.
 
+**Uploads are staged, not published.** Bytes land under an internal `_staging/{releaseId}/` prefix and
+are copied to their published key only by `PublishRelease`. A published key is therefore written exactly
+once, and an aborted or expired release is deleted wholesale from its own prefix with no possibility of
+removing an object a live version is serving. The `url` in the response is the artifact's *eventual*
+published URL — it does not resolve until the release is published.
+
+The whole request is verified before anything is written: every file is hashed and checked against the
+manifest first, so a request containing one bad file leaves no partial state behind and does not disturb
+artifacts already staged for that board.
+
 Additionally, a required `sha256` form field must be included containing a JSON object mapping each artifact type to its expected SHA-256 hex hash:
 
 ```jsonc

@@ -372,6 +372,60 @@ public class ReleasesControllerTests
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Created);
     }
 
+    // ---- Staging isolation ----
+
+    [Test]
+    public async Task Upload_DoesNotWriteThePublishedKey()
+    {
+        var seed = await SeedAsync();
+        using var client = Factory.CreateCiCdClient(seed.RepositoryId);
+        var releaseId = await InitReleaseAsync(client, "1.5.1");
+
+        await UploadArtifactsAsync(client, releaseId, BoardName);
+
+        // Nothing is readable at its published path until publish runs.
+        await Assert.That(Factory.StoredFileExists($"1.5.1/{seed.BoardId}/firmware.bin")).IsFalse();
+        await Assert.That(Factory.StoredFileExists($"_staging/{releaseId}/{seed.BoardId}/firmware.bin")).IsTrue();
+    }
+
+    [Test]
+    public async Task Publish_PromotesStagedArtifactsToPublishedKeys()
+    {
+        var seed = await SeedAsync();
+        using var client = Factory.CreateCiCdClient(seed.RepositoryId);
+        var releaseId = await InitReleaseAsync(client, "1.5.1");
+        await UploadArtifactsAsync(client, releaseId, BoardName);
+
+        var publish = await client.PostAsync($"/v2/firmware/releases/{releaseId}/publish", null);
+        await Assert.That(publish.IsSuccessStatusCode).IsTrue();
+
+        await Assert.That(Factory.StoredFileExists($"1.5.1/{seed.BoardId}/firmware.bin")).IsTrue();
+
+        // And the staging copies are cleared once they are dead weight.
+        await Assert.That(Factory.StoredFileExists($"_staging/{releaseId}/{seed.BoardId}/firmware.bin")).IsFalse();
+    }
+
+    [Test]
+    public async Task Abort_RemovesStagedArtifactsButNeverPublishedOnes()
+    {
+        var seed = await SeedAsync();
+        using var client = Factory.CreateCiCdClient(seed.RepositoryId);
+
+        // Publish 1.5.1 so there are live artifacts on disk to protect.
+        var publishedId = await InitReleaseAsync(client, "1.5.1");
+        await UploadArtifactsAsync(client, publishedId, BoardName);
+        await client.PostAsync($"/v2/firmware/releases/{publishedId}/publish", null);
+
+        // A second, unrelated release is staged and then aborted.
+        var abortedId = await InitReleaseAsync(client, "1.6.0");
+        await UploadArtifactsAsync(client, abortedId, BoardName);
+        var abort = await client.DeleteAsync($"/v2/firmware/releases/{abortedId}");
+        await Assert.That(abort.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
+
+        await Assert.That(Factory.StoredFileExists($"_staging/{abortedId}/{seed.BoardId}/firmware.bin")).IsFalse();
+        await Assert.That(Factory.StoredFileExists($"1.5.1/{seed.BoardId}/firmware.bin")).IsTrue();
+    }
+
     // ---- Helpers ----
 
     private sealed record Seed(Guid RepositoryId, Guid BoardId, Guid ChipId);

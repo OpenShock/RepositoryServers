@@ -46,6 +46,21 @@ public sealed class S3StorageService : IStorageService, IDisposable
     }
 
     /// <inheritdoc />
+    public async Task CopyFileAsync(string sourcePath, string destinationPath, CancellationToken cancellationToken = default)
+    {
+        // Server-side copy — the object never travels through this process.
+        var request = new CopyObjectRequest
+        {
+            SourceBucket = _bucketName,
+            SourceKey = ResolveKey(sourcePath),
+            DestinationBucket = _bucketName,
+            DestinationKey = ResolveKey(destinationPath),
+        };
+
+        await _s3Client.CopyObjectAsync(request, cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task DeleteFileAsync(string path, CancellationToken cancellationToken = default)
     {
         await _s3Client.DeleteObjectAsync(_bucketName, ResolveKey(path), cancellationToken);

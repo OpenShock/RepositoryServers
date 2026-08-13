@@ -75,6 +75,13 @@ public sealed class WebApplicationFactory
     }
 
     /// <summary>
+    /// True when a path exists in the local CDN storage backing this factory. Lets tests assert on
+    /// what actually reached storage, rather than inferring it from response bodies.
+    /// </summary>
+    public bool StoredFileExists(string relativePath) =>
+        File.Exists(Path.Combine(_cdnStoragePath, relativePath.Replace('/', Path.DirectorySeparatorChar)));
+
+    /// <summary>
     /// Wipes all mutable test data between tests without tearing down the container.
     /// Firmware tables first (FK order), then repositories, then catalog.
     /// </summary>
