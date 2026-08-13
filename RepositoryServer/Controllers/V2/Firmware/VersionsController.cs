@@ -141,7 +141,7 @@ public sealed class VersionsController : OpenShockControllerBase
             Version = firmwareVersion,
             BoardId = boardRef.Name,
             Artifacts = artifacts
-                .Select(a => FirmwareResponseMapper.ToArtifactDto(a, firmwareVersion, boardRef.Name, cdnBase))
+                .Select(a => FirmwareResponseMapper.ToArtifactDto(a, firmwareVersion, cdnBase))
                 .ToList()
         });
     }

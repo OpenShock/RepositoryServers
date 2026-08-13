@@ -149,16 +149,20 @@ public class LatestControllerTests
     }
 
     [Test]
-    public async Task GetLatestForBoard_ArtifactUrlUsesBoardName()
+    public async Task GetLatestForBoard_ArtifactUrlUsesImmutableBoardId()
     {
-        await SeedReleaseAsync("1.5.1", ReleaseChannel.Stable);
+        var (boardId, _, _) = await SeedReleaseAsync("1.5.1", ReleaseChannel.Stable);
 
         using var client = Factory.CreateClient();
         var body = await client.GetFromJsonAsync<JsonElement>(
             $"/v2/firmware/latest/stable/{BoardName}");
 
+        // Storage paths are keyed by the board id so a rename cannot strand published artifacts,
+        // while the response still labels the board by name.
+        await Assert.That(body.GetProperty("boardId").GetString()).IsEqualTo(BoardName);
+
         var url = body.GetProperty("artifacts")[0].GetProperty("url").GetString();
-        await Assert.That(url).Contains($"/1.5.1/{BoardName}/");
+        await Assert.That(url).Contains($"/1.5.1/{boardId}/");
     }
 
     [Test]

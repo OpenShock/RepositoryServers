@@ -112,7 +112,7 @@ public sealed class LatestController : OpenShockControllerBase
             Version = latestVersion,
             BoardId = boardRef.Name,
             Artifacts = artifacts
-                .Select(a => FirmwareResponseMapper.ToArtifactDto(a, latestVersion, boardRef.Name, cdnBase))
+                .Select(a => FirmwareResponseMapper.ToArtifactDto(a, latestVersion, cdnBase))
                 .ToList()
         });
     }

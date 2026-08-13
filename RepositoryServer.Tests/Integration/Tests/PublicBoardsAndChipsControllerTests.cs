@@ -42,10 +42,15 @@ public class PublicBoardsAndChipsControllerTests
 
         using var client = Factory.CreateClient();
         var boardsForChipA = await client.GetFromJsonAsync<List<FirmwareBoardDto>>(
-            $"/v2/firmware/boards?chipId={chipAId}");
+            "/v2/firmware/boards?chip=ESP32-S3");
         await Assert.That(boardsForChipA).IsNotNull();
         await Assert.That(boardsForChipA!).Count().IsEqualTo(1);
-        await Assert.That(boardsForChipA[0].ChipId).IsEqualTo(chipAId);
+        await Assert.That(boardsForChipA[0].ChipName).IsEqualTo("ESP32-S3");
+
+        // Chip names are matched case-insensitively, same as board names.
+        var lowerCased = await client.GetFromJsonAsync<List<FirmwareBoardDto>>(
+            "/v2/firmware/boards?chip=esp32-s3");
+        await Assert.That(lowerCased!).Count().IsEqualTo(1);
     }
 
     [Test]

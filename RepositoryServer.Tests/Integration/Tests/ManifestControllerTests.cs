@@ -63,7 +63,7 @@ public class ManifestControllerTests
             var board = new FirmwareBoard
             {
                 Id = Guid.NewGuid(),
-                Name = "OpenShock Core V1",
+                Name = "OpenShock-Core-V1",
                 ChipId = chip.Id,
                 Discontinued = false,
                 RequiredArtifactTypes = [FirmwareArtifactType.Merged]
@@ -118,9 +118,8 @@ public class ManifestControllerTests
 
         var boards = manifest.GetProperty("boards").EnumerateArray().ToList();
         await Assert.That(boards).Count().IsEqualTo(1);
-        await Assert.That(Guid.Parse(boards[0].GetProperty("id").GetString()!))
-            .IsEqualTo(boardId);
-        await Assert.That(boards[0].GetProperty("name").GetString()).IsEqualTo("OpenShock Core V1");
+        // Boards and chips are identified by name on the public surface; UUIDs stay internal.
+        await Assert.That(boards[0].GetProperty("name").GetString()).IsEqualTo("OpenShock-Core-V1");
         await Assert.That(boards[0].GetProperty("chipName").GetString()).IsEqualTo("ESP32-S3");
         await Assert.That(boards[0].GetProperty("discontinued").GetBoolean()).IsFalse();
 

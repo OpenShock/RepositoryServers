@@ -22,7 +22,7 @@ public sealed class BoardsController : OpenShockControllerBase
     [HttpGet]
     [CacheControl(300)]
     public async Task<IActionResult> ListBoards(
-        [FromQuery] Guid? chipId,
+        [FromQuery] string? chip,
         [FromQuery] bool includeDiscontinued = true,
         CancellationToken ct = default)
     {
@@ -30,9 +30,12 @@ public sealed class BoardsController : OpenShockControllerBase
             .Include(b => b.ChipNavigation)
             .Include(b => b.UsbDevices);
 
-        if (chipId is { } cid)
+        // Filter by chip name — what a connected-device detection yields, and what the manifest's
+        // chips array is keyed by. Matched case-insensitively against the unique lower(name) index.
+        if (!string.IsNullOrWhiteSpace(chip))
         {
-            query = query.Where(b => b.ChipId == cid);
+            var loweredChip = chip.ToLowerInvariant();
+            query = query.Where(b => b.ChipNavigation.Name.ToLower() == loweredChip);
         }
 
         if (!includeDiscontinued)
@@ -45,9 +48,7 @@ public sealed class BoardsController : OpenShockControllerBase
         var boards = rows
             .Select(b => new FirmwareBoardDto
             {
-                Id = b.Id,
                 Name = b.Name,
-                ChipId = b.ChipId,
                 ChipName = b.ChipNavigation.Name,
                 Discontinued = b.Discontinued,
                 UsbDevices = b.UsbDevices

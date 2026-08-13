@@ -9,10 +9,10 @@ namespace OpenShock.RepositoryServer.Utils;
 /// </summary>
 public static class FirmwareResponseMapper
 {
-    public static FirmwareArtifactDto ToArtifactDto(FirmwareArtifact artifact, string version, string boardName, string cdnBase) => new()
+    public static FirmwareArtifactDto ToArtifactDto(FirmwareArtifact artifact, string version, string cdnBase) => new()
     {
         Type = artifact.ArtifactType.ToString().ToLowerInvariant(),
-        Url = FirmwareArtifactFileNames.BuildUrl(cdnBase, version, boardName, artifact.ArtifactType),
+        Url = FirmwareArtifactFileNames.BuildUrl(cdnBase, version, artifact.BoardId, artifact.ArtifactType),
         Sha256Hash = Convert.ToHexString(artifact.HashSha256),
         FileSize = artifact.FileSize
     };
@@ -31,18 +31,14 @@ public static class FirmwareResponseMapper
             {
                 detail = new FirmwareBoardDetailDto
                 {
-                    Chip = new FirmwareChipRefDto
-                    {
-                        Id = board.ChipNavigation.Id,
-                        Name = board.ChipNavigation.Name
-                    },
+                    Chip = new FirmwareChipRefDto { Name = board.ChipNavigation.Name },
                     Discontinued = board.Discontinued,
                     Artifacts = new List<FirmwareArtifactDto>()
                 };
                 boardMap[board.Name] = detail;
             }
 
-            detail.Artifacts.Add(ToArtifactDto(artifact, version.Version, board.Name, cdnBase));
+            detail.Artifacts.Add(ToArtifactDto(artifact, version.Version, cdnBase));
         }
 
         var releaseNotes = version.ReleaseNotes

@@ -31,7 +31,6 @@ public sealed class ChipsController : OpenShockControllerBase
         var chips = rows
             .Select(c => new FirmwareChipDto
             {
-                Id = c.Id,
                 Name = c.Name,
                 Architecture = EnumNaming.FormatArchitecture(c.Architecture),
                 UsbDevices = c.UsbDevices

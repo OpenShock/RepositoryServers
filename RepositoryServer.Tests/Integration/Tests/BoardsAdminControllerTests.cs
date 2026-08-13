@@ -72,6 +72,32 @@ public class BoardsAdminControllerTests
     }
 
     [Test]
+    public async Task Post_NameDifferingOnlyByCase_IsRejected()
+    {
+        var chipId = await SeedChipAsync("ESP32");
+        using var client = Factory.CreateAdminClient();
+
+        var first = await client.PostAsJsonAsync(BasePath, new CreateFirmwareBoardRequest
+        {
+            Name = "ESP32-Core",
+            ChipId = chipId,
+            RequiredArtifactTypes = ["merged"]
+        });
+        await Assert.That(first.StatusCode).IsEqualTo(HttpStatusCode.Created);
+
+        // Two boards differing only in case would both resolve to whichever the lookup picked, so the
+        // loser could never receive an upload and a hub compiled with its spelling would be served the
+        // other board's firmware. The unique index on lower(name) makes that unrepresentable.
+        var second = await client.PostAsJsonAsync(BasePath, new CreateFirmwareBoardRequest
+        {
+            Name = "esp32-core",
+            ChipId = chipId,
+            RequiredArtifactTypes = ["merged"]
+        });
+        await Assert.That(second.IsSuccessStatusCode).IsFalse();
+    }
+
+    [Test]
     public async Task Post_InvalidArtifactType_Returns400()
     {
         var chipId = await SeedChipAsync("ESP32");

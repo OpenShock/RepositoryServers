@@ -78,9 +78,7 @@ public sealed class ManifestController : OpenShockControllerBase
         var boards = boardRows
             .Select(b => new FirmwareBoardDto
             {
-                Id = b.Id,
                 Name = b.Name,
-                ChipId = b.ChipId,
                 ChipName = b.ChipNavigation.Name,
                 Discontinued = b.Discontinued,
                 UsbDevices = b.UsbDevices
@@ -92,7 +90,6 @@ public sealed class ManifestController : OpenShockControllerBase
         var chips = chipRows
             .Select(c => new FirmwareChipDto
             {
-                Id = c.Id,
                 Name = c.Name,
                 Architecture = EnumNaming.FormatArchitecture(c.Architecture),
                 UsbDevices = c.UsbDevices

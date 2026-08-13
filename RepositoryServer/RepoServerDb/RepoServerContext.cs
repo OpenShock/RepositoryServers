@@ -199,8 +199,11 @@ public partial class RepoServerContext : DbContext
             entity.Property(e => e.Architecture)
                 .HasColumnName("architecture");
 
+            // Uniqueness is enforced case-insensitively by a unique index on lower(name), created in
+            // the AddCaseInsensitiveNameIndexes migration. Expression indexes cannot be declared in the
+            // EF model, so this is intentionally absent here rather than duplicated as a weaker
+            // case-sensitive index. Chip names must match esptool-js identifiers exactly.
             entity.HasIndex(e => e.Name)
-                .IsUnique()
                 .HasDatabaseName("ix_firmware_chips_name");
         });
 
@@ -225,8 +228,11 @@ public partial class RepoServerContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("fk_firmware_boards_chip");
 
+            // Uniqueness is enforced case-insensitively by a unique index on lower(name), created in
+            // the AddCaseInsensitiveNameIndexes migration — see the chips comment above. A plain unique
+            // index here would permit "ESP32-Core" and "esp32-core" to coexist, and case-insensitive
+            // resolution would then silently pick one of them.
             entity.HasIndex(e => e.Name)
-                .IsUnique()
                 .HasDatabaseName("ix_firmware_boards_name");
         });
 

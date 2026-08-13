@@ -295,7 +295,7 @@ public class ReleasesController : OpenShockControllerBase
                 continue;
             }
 
-            var cdnPath = FirmwareArtifactFileNames.BuildStoragePath(release.Version, boardRef.Name, artifactType);
+            var cdnPath = FirmwareArtifactFileNames.BuildStoragePath(release.Version, boardId, artifactType);
 
             await using var uploadStream = new MemoryStream(bytes);
             await _storage.UploadFileAsync(cdnPath, uploadStream, ct);
@@ -312,7 +312,7 @@ public class ReleasesController : OpenShockControllerBase
             uploadedArtifacts.Add(new FirmwareArtifactDto
             {
                 Type = artifactType.ToString().ToLowerInvariant(),
-                Url = FirmwareArtifactFileNames.BuildUrl(cdnBase, release.Version, boardRef.Name, artifactType),
+                Url = FirmwareArtifactFileNames.BuildUrl(cdnBase, release.Version, boardId, artifactType),
                 Sha256Hash = actual,
                 FileSize = bytes.Length,
             });
@@ -462,13 +462,9 @@ public class ReleasesController : OpenShockControllerBase
             return Problem(FirmwareError.FirmwareReleaseNotEditable);
         }
 
-        var boardNames = await _db.GetBoardNamesAsync(release.StagedArtifacts.Select(a => a.BoardId), ct);
         foreach (var artifact in release.StagedArtifacts)
         {
-            if (!boardNames.TryGetValue(artifact.BoardId, out var boardName))
-                continue;
-
-            var cdnPath = FirmwareArtifactFileNames.BuildStoragePath(release.Version, boardName, artifact.ArtifactType);
+            var cdnPath = FirmwareArtifactFileNames.BuildStoragePath(release.Version, artifact.BoardId, artifact.ArtifactType);
             await _storage.DeleteFileAsync(cdnPath, ct);
         }
 

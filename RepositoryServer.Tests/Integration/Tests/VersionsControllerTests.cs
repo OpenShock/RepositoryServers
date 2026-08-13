@@ -161,9 +161,9 @@ public class VersionsControllerTests
     }
 
     [Test]
-    public async Task GetVersionForBoard_ByName_ReturnsArtifactsWithNamedUrls()
+    public async Task GetVersionForBoard_ByName_LabelsByNameAndAddressesById()
     {
-        await SeedVersionWithNotesAsync("1.5.1");
+        var boardId = await SeedVersionWithNotesAsync("1.5.1");
 
         using var client = Factory.CreateClient();
         var body = await client.GetFromJsonAsync<JsonElement>(
@@ -172,7 +172,7 @@ public class VersionsControllerTests
         await Assert.That(body.GetProperty("boardId").GetString()).IsEqualTo(BoardName);
 
         var url = body.GetProperty("artifacts")[0].GetProperty("url").GetString();
-        await Assert.That(url).Contains($"/1.5.1/{BoardName}/");
+        await Assert.That(url).Contains($"/1.5.1/{boardId}/");
     }
 
     [Test]

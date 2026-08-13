@@ -163,17 +163,34 @@ public class ChangelogParserTests
     }
 
     [Test]
-    public async Task Parse_BulletsIgnoreNonBulletBodyInSameSection()
+    public async Task Parse_SectionProseAndBulletsBothBecomeNotes()
     {
-        // If bullets are present, non-bullet lines in the section are dropped.
-        var input = "### Info\nThis text is ignored\n- Actual item 1\n- Actual item 2";
+        // Prose alongside bullets is content, not noise — it used to be silently discarded.
+        var input = "### Info\nIntroductory prose\n- Actual item 1\n- Actual item 2";
         var result = ChangelogParser.Parse(input);
 
         await Assert.That(result.IsT0).IsTrue();
         var notes = result.AsT0;
-        await Assert.That(notes).Count().IsEqualTo(2);
-        await Assert.That(notes[0].Content).IsEqualTo("Actual item 1");
-        await Assert.That(notes[1].Content).IsEqualTo("Actual item 2");
+        await Assert.That(notes).Count().IsEqualTo(3);
+        await Assert.That(notes[0].Content).IsEqualTo("Introductory prose");
+        await Assert.That(notes[1].Content).IsEqualTo("Actual item 1");
+        await Assert.That(notes[2].Content).IsEqualTo("Actual item 2");
+    }
+
+    [Test]
+    public async Task Parse_NestedBulletsAreFlattenedNotDropped()
+    {
+        // The DTO has no nesting, so indented items become siblings. Previously they fell into the
+        // prose buffer and were discarded along with it.
+        var input = "### Info\n- Parent item\n  - Nested item\n    - Deeply nested item";
+        var result = ChangelogParser.Parse(input);
+
+        await Assert.That(result.IsT0).IsTrue();
+        var notes = result.AsT0;
+        await Assert.That(notes).Count().IsEqualTo(3);
+        await Assert.That(notes[0].Content).IsEqualTo("Parent item");
+        await Assert.That(notes[1].Content).IsEqualTo("Nested item");
+        await Assert.That(notes[2].Content).IsEqualTo("Deeply nested item");
     }
 
     [Test]
@@ -192,9 +209,13 @@ public class ChangelogParserTests
     [Test]
     public async Task Parse_SpecExample_MatchesGoldenStructure()
     {
+        // Reproduced verbatim from the §5.3 worked example. Do not trim lines out of this fixture to
+        // make it pass — every line exercises a documented construct, and a shorter fixture is how the
+        // section-prose divergence went unnoticed.
         var input = string.Join("\n",
             "### Breaking",
             "**Config format** — Changed config format to TOML",
+            "Multiple lines of content are concatenated into a single note.",
             "",
             "### Warning",
             "Requires hub reset after update",
@@ -205,17 +226,19 @@ public class ChangelogParserTests
             "- **OTA** — Added automatic rollback on failed flash",
             "",
             "### Features",
+            "Custom sections become type \"section\" with the heading as title.",
             "- New web dashboard",
             "- Bluetooth pairing support");
         var result = ChangelogParser.Parse(input);
 
         await Assert.That(result.IsT0).IsTrue();
         var notes = result.AsT0;
-        await Assert.That(notes).Count().IsEqualTo(7);
+        await Assert.That(notes).Count().IsEqualTo(8);
 
         await Assert.That(notes[0].Type).IsEqualTo("breaking");
         await Assert.That(notes[0].Title).IsEqualTo("Config format");
-        await Assert.That(notes[0].Content).IsEqualTo("Changed config format to TOML");
+        await Assert.That(notes[0].Content)
+            .IsEqualTo("Changed config format to TOML\nMultiple lines of content are concatenated into a single note.");
 
         await Assert.That(notes[1].Type).IsEqualTo("warning");
         await Assert.That(notes[1].Content).IsEqualTo("Requires hub reset after update");
@@ -226,9 +249,15 @@ public class ChangelogParserTests
         await Assert.That(notes[4].Title).IsEqualTo("OTA");
         await Assert.That(notes[4].Content).IsEqualTo("Added automatic rollback on failed flash");
 
+        // Section prose is a note in its own right, ahead of the section's bullets.
         await Assert.That(notes[5].Type).IsEqualTo("section");
         await Assert.That(notes[5].Title).IsEqualTo("Features");
-        await Assert.That(notes[5].Content).IsEqualTo("New web dashboard");
-        await Assert.That(notes[6].Content).IsEqualTo("Bluetooth pairing support");
+        await Assert.That(notes[5].Content)
+            .IsEqualTo("Custom sections become type \"section\" with the heading as title.");
+
+        await Assert.That(notes[6].Type).IsEqualTo("section");
+        await Assert.That(notes[6].Title).IsEqualTo("Features");
+        await Assert.That(notes[6].Content).IsEqualTo("New web dashboard");
+        await Assert.That(notes[7].Content).IsEqualTo("Bluetooth pairing support");
     }
 }

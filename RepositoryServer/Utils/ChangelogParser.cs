@@ -34,36 +34,33 @@ public static class ChangelogParser
         var buffer = new List<string>();
         var bullets = new List<string>();
 
+        void AddNote(string item)
+        {
+            var trimmed = item.Trim();
+            if (trimmed.Length == 0) return;
+
+            var (title, content) = ExtractTitle(trimmed, currentTitle);
+            notes.Add(new FirmwareReleaseNoteDto
+            {
+                Type = currentType.ToString().ToLowerInvariant(),
+                Title = title,
+                Content = content
+            });
+        }
+
         void FlushSection()
         {
-            if (bullets.Count > 0)
+            // Prose and bullets can coexist in one section — see the "Features" section of the
+            // worked example in firmware-api-spec.md §5.3, where the introductory sentence is its
+            // own note followed by the bullet notes. Emitting prose first preserves that order.
+            if (buffer.Count > 0)
             {
-                foreach (var item in bullets)
-                {
-                    var trimmed = item.Trim();
-                    if (trimmed.Length == 0) continue;
-                    var (title, content) = ExtractTitle(trimmed, currentTitle);
-                    notes.Add(new FirmwareReleaseNoteDto
-                    {
-                        Type = currentType.ToString().ToLowerInvariant(),
-                        Title = title,
-                        Content = content
-                    });
-                }
+                AddNote(string.Join("\n", buffer.Select(l => l.TrimEnd())));
             }
-            else if (buffer.Count > 0)
+
+            foreach (var item in bullets)
             {
-                var combined = string.Join("\n", buffer.Select(l => l.TrimEnd())).Trim();
-                if (combined.Length > 0)
-                {
-                    var (title, content) = ExtractTitle(combined, currentTitle);
-                    notes.Add(new FirmwareReleaseNoteDto
-                    {
-                        Type = currentType.ToString().ToLowerInvariant(),
-                        Title = title,
-                        Content = content
-                    });
-                }
+                AddNote(item);
             }
 
             buffer.Clear();
@@ -90,9 +87,13 @@ public static class ChangelogParser
             if (!sawHeading) continue;
             if (string.IsNullOrWhiteSpace(line)) continue;
 
-            if (line.StartsWith("- ", StringComparison.Ordinal))
+            // Indented bullets are flattened into siblings rather than dropped. The note DTO has no
+            // nesting, and real changelogs use nested lists freely — losing their content silently is
+            // worse than losing their depth.
+            var unindented = line.TrimStart();
+            if (unindented.StartsWith("- ", StringComparison.Ordinal))
             {
-                bullets.Add(line[2..]);
+                bullets.Add(unindented[2..]);
             }
             else
             {

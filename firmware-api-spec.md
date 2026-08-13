@@ -73,7 +73,10 @@ All JSON uses **camelCase** property names. Enums are serialized as **lowercase 
 }
 ```
 
-CDN URL format: `{cdnBaseUrl}/{version}/{boardName}/{filename}`
+CDN URL format: `{cdnBaseUrl}/{version}/{boardId}/{filename}` — the board **UUID**, not its name.
+The name is the public identifier everywhere it acts as a label, but a storage key has to be immutable:
+published versions never change, so a renameable path segment would strand artifacts. Consumers treat
+`url` as opaque and never reconstruct it.
 
 Filenames by type: `merged` → `firmware.bin`, `app` → `app.bin`, `bootloader` → `bootloader.bin`, `partitions` → `partitions.bin`, `staticfs` → `staticfs.bin`
 
@@ -95,10 +98,12 @@ Embedded chip reference within board responses. The `name` field must match espt
 
 ```jsonc
 {
-  "id": "esp32s3",       // internal chip ID (DB primary key)
-  "name": "ESP32-S3"    // display name, matches esptool-js chip name
+  "name": "ESP32-S3"    // public identifier, matches esptool-js chip name exactly
 }
 ```
+
+The chip's UUID is internal and never exposed. `name` is unique and externally pinned by esptool-js,
+and no chip ever appears in a storage path, so a surrogate key buys nothing on the public surface.
 
 ### FirmwareBoardDetail
 
@@ -107,7 +112,6 @@ Per-board data within a release response. Includes chip info, discontinuation st
 ```jsonc
 {
   "chip": {
-    "id": "esp32s3",
     "name": "ESP32-S3"
   },
   "discontinued": false,          // true = board is EOL, still served
@@ -204,7 +208,7 @@ Full release details including release notes. Used by both the latest endpoint a
     "runUrl": "https://github.com/openshock/firmware/actions/runs/12345678901"
   },
   "releaseNotes": [
-    { "type": "breaking", "title": "Config format", "content": "Changed config format to TOML" },
+    { "type": "breaking", "title": "Config format", "content": "Changed config format to TOML\nMultiple lines of content are concatenated into a single note." },
     { "type": "warning", "content": "Requires hub reset after update" },
     { "type": "info", "content": "Fixed WiFi reconnection" },
     { "type": "info", "content": "Improved battery life" }
@@ -214,7 +218,7 @@ Full release details including release notes. Used by both the latest endpoint a
       "chip": { "id": "esp32", "name": "ESP32" },
       "discontinued": false,
       "artifacts": [
-        { "type": "merged", "url": "https://firmware.openshock.org/1.5.1/Wemos-D1-Mini-ESP32/firmware.bin", "sha256Hash": "a1b2c3...", "fileSize": 1572864 }
+        { "type": "merged", "url": "https://firmware.openshock.org/1.5.1/3f1a5c8e-9d24-4b70-8e11-2c6b7a0f4d93/firmware.bin", "sha256Hash": "a1b2c3...", "fileSize": 1572864 }
       ]
     },
     "Pishock-Lite-2021": {
@@ -247,7 +251,7 @@ Version info for paginated lists. Includes source traceability and release notes
     "runUrl": "https://github.com/openshock/firmware/actions/runs/12345678901"
   },
   "releaseNotes": [
-    { "type": "breaking", "title": "Config format", "content": "Changed config format to TOML" },
+    { "type": "breaking", "title": "Config format", "content": "Changed config format to TOML\nMultiple lines of content are concatenated into a single note." },
     { "type": "info", "content": "Fixed WiFi reconnection" }
   ]
 }
@@ -258,16 +262,16 @@ Version info for paginated lists. Includes source traceability and release notes
 Minimal response for a single board in a single version. No release notes, no chip info, no other boards — just what the firmware needs to download and flash.
 
 `boardId` is the board's canonical **name**, echoed back as stored — see §4.2 for why the name is the
-public identifier. The board's UUID is an internal primary key and never appears on the public surface.
+public identifier. The board's UUID appears only inside artifact `url`s, as the immutable storage key.
 
 ```jsonc
 {
   "version": "1.5.1",
   "boardId": "Wemos-D1-Mini-ESP32",
   "artifacts": [
-    { "type": "merged",   "url": "https://firmware.openshock.org/1.5.1/Wemos-D1-Mini-ESP32/firmware.bin", "sha256Hash": "a1b2c3...", "fileSize": 1572864 },
-    { "type": "app",      "url": "https://firmware.openshock.org/1.5.1/Wemos-D1-Mini-ESP32/app.bin",      "sha256Hash": "d4e5f6...", "fileSize": 1048576 },
-    { "type": "staticfs", "url": "https://firmware.openshock.org/1.5.1/Wemos-D1-Mini-ESP32/staticfs.bin", "sha256Hash": "7a8b9c...", "fileSize":  262144 }
+    { "type": "merged",   "url": "https://firmware.openshock.org/1.5.1/3f1a5c8e-9d24-4b70-8e11-2c6b7a0f4d93/firmware.bin", "sha256Hash": "a1b2c3...", "fileSize": 1572864 },
+    { "type": "app",      "url": "https://firmware.openshock.org/1.5.1/3f1a5c8e-9d24-4b70-8e11-2c6b7a0f4d93/app.bin",      "sha256Hash": "d4e5f6...", "fileSize": 1048576 },
+    { "type": "staticfs", "url": "https://firmware.openshock.org/1.5.1/3f1a5c8e-9d24-4b70-8e11-2c6b7a0f4d93/staticfs.bin", "sha256Hash": "7a8b9c...", "fileSize":  262144 }
   ]
 }
 ```
@@ -488,13 +492,15 @@ The board's UUID remains the internal primary key and foreign-key target, and is
 path segment for admin tooling that already holds one. Name matching is case-insensitive; the canonical
 stored spelling comes back in the response.
 
-Because the name is interpolated into storage keys, board names are validated on create/update against
-`^[A-Za-z0-9][A-Za-z0-9._-]*$` — in particular this rejects `/`, which would otherwise let a board name
-reshape the storage path.
+Board names are validated on create/update against `^[A-Za-z0-9][A-Za-z0-9._-]*$` so that they are safe
+as URL path segments, and uniqueness is enforced case-insensitively via a unique index on `lower(name)`.
+Without that index, `ESP32-Core` and `esp32-core` could coexist while resolution silently picked one —
+the other could never receive an upload, and a hub compiled with its spelling would be served the wrong
+board's firmware.
 
-> **A canonical board name is permanent once artifacts publish under it.** Published versions are
-> immutable (§4.4) and their artifacts live under the name in force at publish time, so renaming a board
-> in place orphans them.
+**Renaming is safe.** Storage keys use the board UUID, so a name is a pure label — renaming a board
+changes what clients call it without touching a single stored object. This is the whole reason the
+storage key is not the name.
 
 **Aliases (planned)**: the resolution step is deliberately a single server-side chokepoint, so alternate
 names can be added later without touching storage layout, response shapes, or hubs. An alias table maps
@@ -800,7 +806,10 @@ Custom sections become type "section" with the heading as title.
    - Anything else → `section` (with heading stored as `title`)
 3. **Extract items within a section**:
    - Lines starting with `- ` are individual items (strip the `- ` prefix)
-   - If no bullet points, the entire section body is one item
+   - Indented bullets are flattened into siblings — the note type carries no nesting, so depth is
+     discarded but content is preserved
+   - Non-bullet lines ("prose") are joined with newlines into a single item
+   - A section may contain both: the prose item is emitted first, then the bullet items
    - Empty lines are ignored
 4. **Extract title from items**: If an item starts with `**Title**`, extract it:
    - `**Config format** — Changed to TOML` → `title: "Config format"`, `content: "Changed to TOML"`
@@ -812,7 +821,7 @@ Custom sections become type "section" with the heading as title.
 
 ```jsonc
 [
-  { "type": "breaking", "title": "Config format", "content": "Changed config format to TOML" },
+  { "type": "breaking", "title": "Config format", "content": "Changed config format to TOML\nMultiple lines of content are concatenated into a single note." },
   { "type": "warning", "title": null, "content": "Requires hub reset after update" },
   { "type": "info", "title": null, "content": "Fixed WiFi reconnection" },
   { "type": "info", "title": null, "content": "Improved battery life" },

@@ -42,12 +42,12 @@ public static class FirmwareBoardLookup
                 .FirstOrDefaultAsync(ct);
         }
 
-        // Name carries a case-sensitive unique index, so a case-insensitive match can in principle
-        // hit more than one row. Order by name to keep the choice deterministic.
+        // ix_firmware_boards_name_lower is unique on lower(name), so this matches at most one row and
+        // uses the index. Names are ASCII-only by the create/update regex, so ToLowerInvariant here and
+        // SQL lower() fold identically regardless of database collation.
         var lowered = boardRef.ToLowerInvariant();
         return await db.FirmwareBoards
             .Where(b => b.Name.ToLower() == lowered)
-            .OrderBy(b => b.Name)
             .Select(b => (ResolvedBoard?)new ResolvedBoard(b.Id, b.Name))
             .FirstOrDefaultAsync(ct);
     }
@@ -70,12 +70,8 @@ public static class FirmwareBoardLookup
             .ToListAsync(ct);
 
         var byId = all.ToDictionary(b => b.Id);
-        var byName = new Dictionary<string, ResolvedBoard>(StringComparer.OrdinalIgnoreCase);
-        foreach (var board in all)
-        {
-            // Ordered by name above, so a case-insensitive collision resolves deterministically.
-            byName.TryAdd(board.Name, board);
-        }
+        // Safe as an OrdinalIgnoreCase dictionary because lower(name) is unique — no key can collide.
+        var byName = all.ToDictionary(b => b.Name, StringComparer.OrdinalIgnoreCase);
 
         var resolved = new List<ResolvedBoard>();
         var unknown = new List<string>();
@@ -102,21 +98,4 @@ public static class FirmwareBoardLookup
         return (resolved, unknown);
     }
 
-    /// <summary>
-    /// Maps board ids to their names. Needed wherever a storage path has to be rebuilt from rows
-    /// that only carry the board id — staged artifacts, which have no board navigation property.
-    /// </summary>
-    public static async Task<Dictionary<Guid, string>> GetBoardNamesAsync(
-        this RepoServerContext db, IEnumerable<Guid> boardIds, CancellationToken ct)
-    {
-        var ids = boardIds.Distinct().ToList();
-        if (ids.Count == 0)
-        {
-            return [];
-        }
-
-        return await db.FirmwareBoards
-            .Where(b => ids.Contains(b.Id))
-            .ToDictionaryAsync(b => b.Id, b => b.Name, ct);
-    }
 }

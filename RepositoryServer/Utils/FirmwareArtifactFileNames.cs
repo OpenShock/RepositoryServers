@@ -16,19 +16,23 @@ public static class FirmwareArtifactFileNames
 
     /// <summary>
     /// Storage path for an artifact, relative to the CDN root:
-    /// <c>{version}/{boardName}/{artifactType}.bin</c>.
+    /// <c>{version}/{boardId}/{artifactType}.bin</c>.
     /// </summary>
     /// <remarks>
-    /// The board <em>name</em> is the path segment, not the board id — see firmware-api-spec.md §4.2.
-    /// Board names are validated as URL-safe on create/update, so they need no escaping here.
+    /// Deliberately keyed by the board <em>id</em>, not its name. Published versions are immutable, so
+    /// a path segment has to be immutable too: renaming a board whose name was baked into storage keys
+    /// would strand every artifact ever published for it, unrecoverably — nothing records the name a
+    /// blob was written under. The id never changes, so a rename is a pure metadata edit.
+    /// The board name remains the public identifier everywhere it is a label rather than a key:
+    /// routes, response fields, ingestion and errors. See firmware-api-spec.md §4.2.
     /// </remarks>
-    public static string BuildStoragePath(string version, string boardName, FirmwareArtifactType type)
-        => $"{version}/{boardName}/{GetFileName(type)}";
+    public static string BuildStoragePath(string version, Guid boardId, FirmwareArtifactType type)
+        => $"{version}/{boardId}/{GetFileName(type)}";
 
     /// <summary>
     /// Absolute CDN URL for an artifact. <paramref name="cdnBase"/> must already be trimmed of any
-    /// trailing slash.
+    /// trailing slash. Consumers treat this as opaque and never reconstruct it.
     /// </summary>
-    public static string BuildUrl(string cdnBase, string version, string boardName, FirmwareArtifactType type)
-        => $"{cdnBase}/{BuildStoragePath(version, boardName, type)}";
+    public static string BuildUrl(string cdnBase, string version, Guid boardId, FirmwareArtifactType type)
+        => $"{cdnBase}/{BuildStoragePath(version, boardId, type)}";
 }
