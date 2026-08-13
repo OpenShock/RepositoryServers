@@ -8,7 +8,7 @@ using OpenShock.RepositoryServer.Config;
 namespace OpenShock.RepositoryServer.AuthenticationHandlers;
 
 /// <summary>
-/// Authenticates every request as an administrator, replacing the Authentik session for local
+/// Authenticates every request as an administrator, replacing the GitHub session for local
 /// development.
 /// </summary>
 /// <remarks>
@@ -37,17 +37,17 @@ public sealed class DevAdminAuthentication : AuthenticationHandler<Authenticatio
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         var username = _apiConfig.DevAuth.Username;
-        var group = _apiConfig.Authentik?.AdminGroup ?? AdminAuthMode.DevFallbackGroup;
+        var team = _apiConfig.GitHub?.Team ?? AdminAuthMode.DevFallbackTeam;
 
         var identity = new ClaimsIdentity(
             [
                 new Claim(AuthSchemas.AdminClaims.Subject, username),
                 new Claim(AuthSchemas.AdminClaims.Username, username),
-                new Claim(AuthSchemas.AdminClaims.Group, group)
+                new Claim(AuthSchemas.AdminClaims.Team, team)
             ],
             Scheme.Name,
             AuthSchemas.AdminClaims.Username,
-            AuthSchemas.AdminClaims.Group);
+            AuthSchemas.AdminClaims.Team);
 
         var ticket = new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name);
         return Task.FromResult(AuthenticateResult.Success(ticket));

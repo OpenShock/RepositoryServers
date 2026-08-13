@@ -3,18 +3,9 @@
     <ProjectReference Include="..\RepositoryServer\RepositoryServer.csproj" />
   </ItemGroup>
 
-  <!-- Props -->
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
-    <LangVersion>default</LangVersion>
-    <AssemblyName>OpenShock.RepositoryServer.Tests</AssemblyName>
-    <RootNamespace>OpenShock.RepositoryServer.Tests</RootNamespace>
-    <Company>OpenShock.RepositoryServer.Tests</Company>
-    <Product>OpenShock.RepositoryServer.Tests</Product>
   </PropertyGroup>
 
   <!-- NuGet packages -->

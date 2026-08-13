@@ -1,180 +1,227 @@
 @page "/admin/firmware/advisories"
 @attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
-@inject AdvisoryAdminService AdvisoryService
+@inherits AdminPageBase
 
-<h2>Advisories</h2>
+<PageHeader Title="Advisories">
+    <Subtitle>
+        Warnings served on the public firmware manifest, so the flashtool and hubs can tell users about a
+        bad version. Affected versions is a semver range, e.g. <code>&lt;1.4.0</code>.
+    </Subtitle>
+    <Actions>
+        <BbButton OnClick="OpenCreate">Add advisory</BbButton>
+    </Actions>
+</PageHeader>
 
-<p class="muted">
-    Warnings served on the public firmware manifest, so the flashtool and hubs can tell users about a
-    bad version. Affected versions is a semver range, e.g. <code>&lt;1.4.0</code>.
-</p>
+<BbCard Class="w-full overflow-hidden p-0">
+        <BbDataGrid TData="FirmwareAdvisory" Items="_advisories" IsLoading="_loading" Striped="true"
+                    StickyHeader="true">
+            <EmptyTemplate>
+                <div class="flex flex-col items-center gap-3 py-12 text-center">
+                    <p class="text-muted-foreground">No advisories.</p>
+                    <BbButton Variant="ButtonVariant.Outline" OnClick="OpenCreate">Publish an advisory</BbButton>
+                </div>
+            </EmptyTemplate>
+            <Columns>
+                <BbDataGridPropertyColumn TData="FirmwareAdvisory" TProp="AdvisorySeverity"
+                                          Property="a => a.Severity" Title="Severity">
+                    <CellTemplate>
+                        <BbBadge Variant="@SeverityVariant(context.Severity)">
+                            @context.Severity.ToString().ToLowerInvariant()
+                        </BbBadge>
+                    </CellTemplate>
+                </BbDataGridPropertyColumn>
+                <BbDataGridPropertyColumn TData="FirmwareAdvisory" TProp="string" Property="a => a.Title"
+                                          Title="Title"/>
+                <BbDataGridPropertyColumn TData="FirmwareAdvisory" TProp="string"
+                                          Property="a => a.AffectedVersions" Title="Affects">
+                    <CellTemplate>
+                        <code>@context.AffectedVersions</code>
+                    </CellTemplate>
+                </BbDataGridPropertyColumn>
+                <BbDataGridTemplateColumn TData="FirmwareAdvisory" Title="Link" Sortable="false">
+                    @if (context.Url is { } url)
+                    {
+                        <a href="@url" target="_blank" class="text-sm underline">open</a>
+                    }
+                </BbDataGridTemplateColumn>
+                <BbDataGridTemplateColumn TData="FirmwareAdvisory" Title="" Sortable="false" Width="0">
+                    <div class="flex justify-end gap-1">
+                        <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall" OnClick="() => OpenEdit(context)" AriaLabel="Edit" title="Edit">
+                        <Glyph Name="IconName.Pencil"/>
+                    </BbButton>
+                        <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall" Class="text-destructive" OnClick="() => DeleteAsync(context)" AriaLabel="Delete" title="Delete">
+                        <Glyph Name="IconName.Trash"/>
+                    </BbButton>
+                    </div>
+                </BbDataGridTemplateColumn>
+            </Columns>
+    </BbDataGrid>
+</BbCard>
 
-<StatusAlert Error="@_error" Message="@_message"/>
+<BbDialog @bind-Open="_formOpen">
+    <BbDialogContent Class="sm:max-w-lg">
+        <BbDialogHeader>
+            <BbDialogTitle>@(_editingId is null ? "New advisory" : $"Edit {_title}")</BbDialogTitle>
+            <BbDialogDescription>
+                Served on the public firmware manifest. Affected versions is a semver range.
+            </BbDialogDescription>
+        </BbDialogHeader>
 
-<table>
-    <thead>
-    <tr>
-        <th>Severity</th>
-        <th>Title</th>
-        <th>Affects</th>
-        <th>Link</th>
-        <th></th>
-    </tr>
-    </thead>
-    <tbody>
-    @foreach (var advisory in _advisories)
-    {
-        <tr>
-            <td>@advisory.Severity.ToString().ToLowerInvariant()</td>
-            <td>@advisory.Title</td>
-            <td><code>@advisory.AffectedVersions</code></td>
-            <td class="muted">@(advisory.Url ?? "")</td>
-            <td>
-                <EditForm FormName="@($"delete-advisory-{advisory.Id}")" Model="_actionModel"
-                          OnValidSubmit="() => DeleteAsync(advisory.Id)">
-                    <AntiforgeryToken/>
-                    <button type="submit" class="danger">Delete</button>
-                </EditForm>
-            </td>
-        </tr>
-    }
-    @if (_advisories.Length == 0)
-    {
-        <tr>
-            <td colspan="5" class="empty">No advisories.</td>
-        </tr>
-    }
-    </tbody>
-</table>
+        <div class="flex flex-col gap-4 py-2">
+            <div class="flex flex-col gap-2">
+                <BbLabel>Severity</BbLabel>
+                <BbSelect TValue="AdvisorySeverity" @bind-Value="_severity">
+                    <BbSelectTrigger TValue="AdvisorySeverity">
+                        <BbSelectValue Placeholder="severity"/>
+                    </BbSelectTrigger>
+                    <BbSelectContent TValue="AdvisorySeverity">
+                        @foreach (var severity in Severities)
+                        {
+                            <BbSelectItem TValue="AdvisorySeverity" Value="@severity"
+                                          Text="@severity.ToString().ToLowerInvariant()"/>
+                        }
+                    </BbSelectContent>
+                </BbSelect>
+            </div>
+            <div class="flex flex-col gap-2">
+                <BbLabel For="title">Title</BbLabel>
+                <BbInput Id="title" @bind-Value="_title" Placeholder="OTA bricking bug"/>
+            </div>
+            <div class="flex flex-col gap-2">
+                <BbLabel For="content">Content</BbLabel>
+                <BbTextarea Id="content" @bind-Value="_content" Class="min-h-24"/>
+            </div>
+            <div class="flex flex-col gap-2">
+                <BbLabel For="affects">Affected versions</BbLabel>
+                <BbInput Id="affects" @bind-Value="_affectedVersions" Placeholder="&lt;1.4.0"/>
+            </div>
+            <div class="flex flex-col gap-2">
+                <BbLabel For="url">Link</BbLabel>
+                <BbInput Id="url" @bind-Value="_url"
+                         Placeholder="https://github.com/OpenShock/firmware/issues/123"/>
+            </div>
+        </div>
 
-<h3>Add or edit</h3>
-
-<EditForm FormName="save-advisory" Model="SaveInput!" OnValidSubmit="SaveAsync" class="stack">
-    <AntiforgeryToken/>
-    <label>
-        Advisory
-        <InputSelect @bind-Value="SaveInput!.AdvisoryId">
-            <option value="">new advisory</option>
-            @foreach (var advisory in _advisories)
-            {
-                <option value="@advisory.Id">@advisory.Title</option>
-            }
-        </InputSelect>
-    </label>
-    <label>
-        Severity
-        <InputSelect @bind-Value="SaveInput!.Severity">
-            @foreach (var severity in Severities)
-            {
-                <option value="@severity">@severity.ToString().ToLowerInvariant()</option>
-            }
-        </InputSelect>
-    </label>
-    <label>
-        Title
-        <InputText @bind-Value="SaveInput!.Title" placeholder="OTA bricking bug"/>
-    </label>
-    <label>
-        Content
-        <InputTextArea @bind-Value="SaveInput!.Content" rows="4"/>
-    </label>
-    <label>
-        Affected versions
-        <InputText @bind-Value="SaveInput!.AffectedVersions" placeholder="&lt;1.4.0"/>
-    </label>
-    <label>
-        Link
-        <InputText @bind-Value="SaveInput!.Url" placeholder="https://github.com/OpenShock/firmware/issues/123"/>
-    </label>
-    <button type="submit">Save</button>
-</EditForm>
+        <BbDialogFooter>
+            <BbButton Variant="ButtonVariant.Outline" OnClick="() => _formOpen = false">Cancel</BbButton>
+            <BbButton OnClick="SaveAsync">Save</BbButton>
+        </BbDialogFooter>
+    </BbDialogContent>
+</BbDialog>
 
 @code {
     private static readonly AdvisorySeverity[] Severities = Enum.GetValues<AdvisorySeverity>();
 
     private FirmwareAdvisory[] _advisories = [];
-    private string? _error;
-    private string? _message;
+    private bool _loading = true;
 
-    // No initializer: the binder assigns this on every post and would overwrite one with null (BL0008).
-    [SupplyParameterFromForm(FormName = "save-advisory")]
-    private AdvisoryInput? SaveInput { get; set; }
+    private bool _formOpen;
+    private Guid? _editingId;
+    private AdvisorySeverity _severity = AdvisorySeverity.Info;
+    private string _title = string.Empty;
+    private string _content = string.Empty;
+    private string _affectedVersions = string.Empty;
+    private string? _url;
 
-    /// <summary>Satisfies EditForm on the delete buttons, which carry an id and no fields.</summary>
-    private readonly EmptyInput _actionModel = new();
+    protected override Task OnInitializedAsync() => LoadAsync();
 
-    protected override async Task OnInitializedAsync()
+    private async Task LoadAsync()
     {
-        SaveInput ??= new AdvisoryInput();
-        await LoadAsync();
+        _loading = true;
+        await using var scope = CreateScope();
+        _advisories = await scope.Get<AdvisoryAdminService>().ListAsync();
+        _loading = false;
     }
 
-    private async Task LoadAsync() => _advisories = await AdvisoryService.ListAsync();
+    private static BadgeVariant SeverityVariant(AdvisorySeverity severity) => severity switch
+    {
+        AdvisorySeverity.Critical => BadgeVariant.Destructive,
+        AdvisorySeverity.Warning => BadgeVariant.Default,
+        _ => BadgeVariant.Secondary
+    };
+
+    private void OpenCreate()
+    {
+        ResetForm();
+        _formOpen = true;
+    }
+
+    private void OpenEdit(FirmwareAdvisory advisory)
+    {
+        _formOpen = true;
+        _editingId = advisory.Id;
+        _severity = advisory.Severity;
+        _title = advisory.Title;
+        _content = advisory.Content;
+        _affectedVersions = advisory.AffectedVersions;
+        _url = advisory.Url;
+    }
+
+    private void ResetForm()
+    {
+        _editingId = null;
+        _severity = AdvisorySeverity.Info;
+        _title = string.Empty;
+        _content = string.Empty;
+        _affectedVersions = string.Empty;
+        _url = null;
+    }
 
     private async Task SaveAsync()
     {
-        if (string.IsNullOrWhiteSpace(SaveInput!.Title) ||
-            string.IsNullOrWhiteSpace(SaveInput.Content) ||
-            string.IsNullOrWhiteSpace(SaveInput.AffectedVersions))
+        if (string.IsNullOrWhiteSpace(_title) ||
+            string.IsNullOrWhiteSpace(_content) ||
+            string.IsNullOrWhiteSpace(_affectedVersions))
         {
-            Report("Title, content and affected versions are all required.", string.Empty);
+            ReportError("Title, content and affected versions are all required.");
             return;
         }
 
-        var url = string.IsNullOrWhiteSpace(SaveInput.Url) ? null : SaveInput.Url.Trim();
+        var url = string.IsNullOrWhiteSpace(_url) ? null : _url.Trim();
 
-        if (SaveInput.AdvisoryId is { } advisoryId)
+        await using (var scope = CreateScope())
         {
-            var result = await AdvisoryService.UpdateAsync(
-                advisoryId, SaveInput.Severity, SaveInput.Title, SaveInput.Content,
-                SaveInput.AffectedVersions, url);
+            var advisories = scope.Get<AdvisoryAdminService>();
+
+            if (_editingId is { } advisoryId)
+            {
+                var result = await advisories.UpdateAsync(
+                    advisoryId, _severity, _title, _content, _affectedVersions, url);
+
+                Report(
+                    result.Match<string?>(
+                        _ => null,
+                        _ => "That advisory no longer exists."),
+                    "Saved.");
+            }
+            else
+            {
+                await advisories.CreateAsync(_severity, _title, _content, _affectedVersions, url);
+                Report(null, "Published to the manifest.");
+            }
+        }
+
+        _formOpen = false;
+        ResetForm();
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(FirmwareAdvisory advisory)
+    {
+        if (!await ConfirmAsync("Delete advisory", $"Delete \"{advisory.Title}\"?")) return;
+
+        await using (var scope = CreateScope())
+        {
+            var result = await scope.Get<AdvisoryAdminService>().DeleteAsync(advisory.Id);
 
             Report(
                 result.Match<string?>(
                     _ => null,
                     _ => "That advisory no longer exists."),
-                "Saved.");
-        }
-        else
-        {
-            await AdvisoryService.CreateAsync(
-                SaveInput.Severity, SaveInput.Title, SaveInput.Content, SaveInput.AffectedVersions, url);
-
-            Report(null, "Published to the manifest.");
+                "Deleted.");
         }
 
-        SaveInput = new AdvisoryInput();
+        if (_editingId == advisory.Id) ResetForm();
         await LoadAsync();
     }
-
-    private async Task DeleteAsync(Guid advisoryId)
-    {
-        var result = await AdvisoryService.DeleteAsync(advisoryId);
-
-        Report(
-            result.Match<string?>(
-                _ => null,
-                _ => "That advisory no longer exists."),
-            "Deleted.");
-
-        await LoadAsync();
-    }
-
-    private void Report(string? error, string success)
-    {
-        _error = error;
-        _message = error is null ? success : null;
-    }
-
-    private sealed class AdvisoryInput
-    {
-        public Guid? AdvisoryId { get; set; }
-        public AdvisorySeverity Severity { get; set; } = AdvisorySeverity.Info;
-        public string Title { get; set; } = string.Empty;
-        public string Content { get; set; } = string.Empty;
-        public string AffectedVersions { get; set; } = string.Empty;
-        public string? Url { get; set; }
-    }
-
-    private sealed class EmptyInput;
 }

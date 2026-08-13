@@ -27,7 +27,7 @@ public sealed class AuthController : OpenShockControllerBase
     }
 
     /// <summary>
-    /// Starts the Authentik login. Returns a redirect to the identity provider.
+    /// Starts the GitHub login. Returns a redirect to GitHub's authorization page.
     /// </summary>
     [HttpGet("login")]
     [AllowAnonymous]
@@ -40,7 +40,7 @@ public sealed class AuthController : OpenShockControllerBase
             return Problem(AuthResultError.InvalidReturnUrl);
         }
 
-        // Under the development bypass there is no identity provider and no OIDC scheme registered,
+        // Under the development bypass there is no identity provider and no OAuth scheme registered,
         // so there is nothing to challenge. The caller is already an admin.
         if (_authMode.DevBypass)
         {
@@ -49,12 +49,17 @@ public sealed class AuthController : OpenShockControllerBase
 
         return Challenge(
             new AuthenticationProperties { RedirectUri = returnUrl ?? "/" },
-            AuthSchemas.AdminOidc);
+            AuthSchemas.AdminOAuth);
     }
 
     /// <summary>
-    /// Ends the local session and the Authentik session it came from.
+    /// Ends the local session.
     /// </summary>
+    /// <remarks>
+    /// Only the cookie is dropped. GitHub has no front-channel logout for OAuth apps, so the user
+    /// stays signed in to GitHub itself and a later /auth/login will sign them straight back in
+    /// without a prompt. Revoking that is done from the account's authorized-apps settings.
+    /// </remarks>
     [HttpGet("logout")]
     [AllowAnonymous]
     public IActionResult Logout()
@@ -64,12 +69,9 @@ public sealed class AuthController : OpenShockControllerBase
             return LocalRedirect("/");
         }
 
-        // Dropping only the cookie would leave the Authentik session intact, so the next visit to
-        // /auth/login would silently sign the same account straight back in.
         return SignOut(
             new AuthenticationProperties { RedirectUri = "/" },
-            AuthSchemas.AdminCookie,
-            AuthSchemas.AdminOidc);
+            AuthSchemas.AdminCookie);
     }
 
     /// <summary>
@@ -81,6 +83,6 @@ public sealed class AuthController : OpenShockControllerBase
     {
         subject = User.FindFirstValue(AuthSchemas.AdminClaims.Subject),
         username = User.FindFirstValue(AuthSchemas.AdminClaims.Username),
-        groups = User.FindAll(AuthSchemas.AdminClaims.Group).Select(c => c.Value).ToArray()
+        team = User.FindFirstValue(AuthSchemas.AdminClaims.Team)
     });
 }

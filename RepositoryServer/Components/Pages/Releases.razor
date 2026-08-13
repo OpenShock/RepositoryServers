@@ -1,176 +1,203 @@
 @page "/admin/firmware/releases"
 @attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
-@inject ReleaseAdminService ReleaseService
+@inherits AdminPageBase
 
-<h2>Releases</h2>
+<PageHeader Title="Releases">
+    <Subtitle>
+        Releases CI created but has not published. A release whose changelog failed to parse lands in
+        <code>editing</code> and cannot be published until the notes are fixed here, which returns it to
+        <code>staging</code>.
+    </Subtitle>
+</PageHeader>
 
-<p class="muted">
-    Releases CI created but has not published. A release whose changelog failed to parse lands in
-    <code>editing</code> and cannot be published until the notes are fixed here, which returns it to
-    <code>staging</code>.
-</p>
+<h2 class="text-lg font-semibold">In flight</h2>
 
-<StatusAlert Error="@_error" Message="@_message"/>
+<BbCard Class="w-full overflow-hidden p-0">
+    <BbDataGrid TData="FirmwareRelease" Items="_releases" IsLoading="_loading" Striped="true"
+                StickyHeader="true">
+        <EmptyTemplate>
+            <p class="p-4 text-sm text-muted-foreground">Nothing in flight.</p>
+        </EmptyTemplate>
+        <Columns>
+            <BbDataGridPropertyColumn TData="FirmwareRelease" TProp="string" Property="r => r.Version"
+                                      Title="Version">
+                <CellTemplate>
+                    <code>@context.Version</code>
+                </CellTemplate>
+            </BbDataGridPropertyColumn>
+            <BbDataGridPropertyColumn TData="FirmwareRelease" TProp="ReleaseChannel"
+                                      Property="r => r.Channel" Title="Channel">
+                <CellTemplate>@context.Channel.ToString().ToLowerInvariant()</CellTemplate>
+            </BbDataGridPropertyColumn>
+            <BbDataGridPropertyColumn TData="FirmwareRelease" TProp="ReleaseStatus" Property="r => r.Status"
+                                      Title="Status">
+                <CellTemplate>
+                    <BbBadge Variant="@(context.Status == ReleaseStatus.Editing
+                                          ? BadgeVariant.Destructive : BadgeVariant.Secondary)">
+                        @context.Status.ToString().ToLowerInvariant()
+                    </BbBadge>
+                </CellTemplate>
+            </BbDataGridPropertyColumn>
+            <BbDataGridPropertyColumn TData="FirmwareRelease" TProp="DateTimeOffset" Property="r => r.CreatedAt"
+                                      Title="Created">
+                <CellTemplate>
+                    <span class="text-muted-foreground">@context.CreatedAt.ToString("u")</span>
+                </CellTemplate>
+            </BbDataGridPropertyColumn>
+            <BbDataGridTemplateColumn TData="FirmwareRelease" Title="Notes" Sortable="false">
+                <span class="text-muted-foreground">@NoteCount(context.Id)</span>
+            </BbDataGridTemplateColumn>
+            <BbDataGridTemplateColumn TData="FirmwareRelease" Title="" Sortable="false" Width="0">
+                <div class="flex justify-end">
+                    <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall" OnClick="() => OpenChangelog(context)" AriaLabel="Fix changelog" title="Fix changelog">
+                        <Glyph Name="IconName.FileText"/>
+                    </BbButton>
+                </div>
+            </BbDataGridTemplateColumn>
+        </Columns>
+    </BbDataGrid>
+</BbCard>
 
-<table>
-    <thead>
-    <tr>
-        <th>Version</th>
-        <th>Channel</th>
-        <th>Status</th>
-        <th>Created</th>
-        <th>Notes</th>
-    </tr>
-    </thead>
-    <tbody>
-    @foreach (var release in _releases)
-    {
-        <tr>
-            <td><code>@release.Version</code></td>
-            <td>@release.Channel.ToString().ToLowerInvariant()</td>
-            <td>@release.Status.ToString().ToLowerInvariant()</td>
-            <td class="muted">@release.CreatedAt.ToString("u")</td>
-            <td class="muted">@NoteCount(release.Id)</td>
-        </tr>
-    }
-    @if (_releases.Length == 0)
-    {
-        <tr>
-            <td colspan="5" class="empty">Nothing in flight.</td>
-        </tr>
-    }
-    </tbody>
-</table>
+<BbDialog @bind-Open="_changelogOpen">
+    <BbDialogContent Class="sm:max-w-2xl">
+        <BbDialogHeader>
+            <BbDialogTitle>Fix changelog for @_changelogVersion</BbDialogTitle>
+            <BbDialogDescription>
+                Markdown with ### Heading sections. Replaces the staged notes wholesale and puts the
+                release back into staging.
+            </BbDialogDescription>
+        </BbDialogHeader>
 
-@if (_releases.Length > 0)
-{
-    <h3>Fix a changelog</h3>
+        <div class="py-2">
+            <BbTextarea @bind-Value="_changelog" Class="min-h-64 font-mono"
+                        Placeholder="### Breaking&#10;**Config format** &#8212; Changed to TOML&#10;&#10;### Info&#10;- Fixed WiFi reconnection"/>
+        </div>
 
-    <p class="muted">
-        Markdown with <code>### Heading</code> sections. Replaces the staged notes wholesale and puts
-        the release back into <code>staging</code>.
-    </p>
+        <BbDialogFooter>
+            <BbButton Variant="ButtonVariant.Outline" OnClick="CloseChangelog">Cancel</BbButton>
+            <BbButton OnClick="FixChangelogAsync">Save and return to staging</BbButton>
+        </BbDialogFooter>
+    </BbDialogContent>
+</BbDialog>
 
-    <EditForm FormName="fix-changelog" Model="ChangelogInput!" OnValidSubmit="FixChangelogAsync" class="stack">
-        <AntiforgeryToken/>
-        <label>
-            Release
-            <InputSelect @bind-Value="ChangelogInput!.ReleaseId">
-                <option value="">select</option>
-                @foreach (var release in _releases)
-                {
-                    <option value="@release.Id">@release.Version (@release.Status.ToString().ToLowerInvariant())</option>
-                }
-            </InputSelect>
-        </label>
-        <label>
-            Changelog
-            <InputTextArea @bind-Value="ChangelogInput!.Changelog" rows="10"
-                           placeholder="### Breaking&#10;**Config format** — Changed to TOML&#10;&#10;### Info&#10;- Fixed WiFi reconnection"/>
-        </label>
-        <button type="submit">Save and return to staging</button>
-    </EditForm>
-}
-
-<h3>Published versions</h3>
-
-<p class="muted">
+<h2 class="text-lg font-semibold">Published versions</h2>
+<p class="mb-4 max-w-3xl text-sm text-muted-foreground">
     Removing a version stops it being served. Artifacts stay in storage: they are immutable, and a
     version is normally pulled because it is bad rather than because the bytes must disappear.
 </p>
 
-<table>
-    <thead>
-    <tr>
-        <th>Version</th>
-        <th>Channel</th>
-        <th>Released</th>
-        <th></th>
-    </tr>
-    </thead>
-    <tbody>
-    @foreach (var version in _versions)
-    {
-        <tr>
-            <td><code>@version.Version</code></td>
-            <td>@version.Channel.ToString().ToLowerInvariant()</td>
-            <td class="muted">@version.ReleaseDate.ToString("u")</td>
-            <td>
-                <EditForm FormName="@($"delete-version-{version.Version}")" Model="_actionModel"
-                          OnValidSubmit="() => DeleteVersionAsync(version.Version)">
-                    <AntiforgeryToken/>
-                    <button type="submit" class="danger">Unpublish</button>
-                </EditForm>
-            </td>
-        </tr>
-    }
-    @if (_versions.Length == 0)
-    {
-        <tr>
-            <td colspan="4" class="empty">Nothing published yet.</td>
-        </tr>
-    }
-    </tbody>
-</table>
+<BbCard Class="w-full overflow-hidden p-0">
+    <BbDataGrid TData="FirmwareVersion" Items="_versions" IsLoading="_loading" Striped="true"
+                StickyHeader="true">
+        <EmptyTemplate>
+            <p class="p-4 text-sm text-muted-foreground">Nothing published yet.</p>
+        </EmptyTemplate>
+        <Columns>
+            <BbDataGridPropertyColumn TData="FirmwareVersion" TProp="string" Property="v => v.Version"
+                                      Title="Version">
+                <CellTemplate>
+                    <code>@context.Version</code>
+                </CellTemplate>
+            </BbDataGridPropertyColumn>
+            <BbDataGridPropertyColumn TData="FirmwareVersion" TProp="ReleaseChannel"
+                                      Property="v => v.Channel" Title="Channel">
+                <CellTemplate>@context.Channel.ToString().ToLowerInvariant()</CellTemplate>
+            </BbDataGridPropertyColumn>
+            <BbDataGridPropertyColumn TData="FirmwareVersion" TProp="DateTimeOffset" Property="v => v.ReleaseDate"
+                                      Title="Released">
+                <CellTemplate>
+                    <span class="text-muted-foreground">@context.ReleaseDate.ToString("u")</span>
+                </CellTemplate>
+            </BbDataGridPropertyColumn>
+            <BbDataGridTemplateColumn TData="FirmwareVersion" Title="" Sortable="false" Width="0">
+                <div class="flex justify-end">
+                    <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall" Class="text-destructive" OnClick="() => DeleteVersionAsync(context.Version)" AriaLabel="Unpublish" title="Unpublish">
+                        <Glyph Name="IconName.Trash"/>
+                    </BbButton>
+                </div>
+            </BbDataGridTemplateColumn>
+        </Columns>
+    </BbDataGrid>
+</BbCard>
 
 @code {
     private FirmwareRelease[] _releases = [];
     private FirmwareVersion[] _versions = [];
     private Dictionary<Guid, int> _noteCounts = new();
-    private string? _error;
-    private string? _message;
+    private bool _loading = true;
 
-    // No initializer: the binder assigns this on every post and would overwrite one with null (BL0008).
-    [SupplyParameterFromForm(FormName = "fix-changelog")]
-    private ChangelogInputModel? ChangelogInput { get; set; }
+    private bool _changelogOpen;
+    private Guid? _changelogReleaseId;
+    private string _changelogVersion = string.Empty;
+    private string _changelog = string.Empty;
 
-    /// <summary>Satisfies EditForm on the row buttons, which carry an id and no fields.</summary>
-    private readonly EmptyInput _actionModel = new();
-
-    protected override async Task OnInitializedAsync()
-    {
-        ChangelogInput ??= new ChangelogInputModel();
-        await LoadAsync();
-    }
+    protected override Task OnInitializedAsync() => LoadAsync();
 
     private async Task LoadAsync()
     {
-        _releases = await ReleaseService.ListEditableAsync();
-        _versions = await ReleaseService.ListVersionsAsync();
+        _loading = true;
 
-        _noteCounts = new Dictionary<Guid, int>();
-        foreach (var release in _releases)
-        {
-            var notes = await ReleaseService.ListStagedNotesAsync(release.Id);
-            _noteCounts[release.Id] = notes.Length;
-        }
+        await using var scope = CreateScope();
+        var releases = scope.Get<ReleaseAdminService>();
+
+        _releases = await releases.ListEditableAsync();
+        _versions = await releases.ListVersionsAsync();
+
+        // One grouped count rather than a ListStagedNotesAsync per release: the note bodies were
+        // fetched only to be thrown away after reading .Length, once per row.
+        var releaseIds = _releases.Select(r => r.Id).ToArray();
+        _noteCounts = await scope.Get<RepoServerContext>().FirmwareStagedReleaseNotes
+            .Where(n => releaseIds.Contains(n.ReleaseId))
+            .GroupBy(n => n.ReleaseId)
+            .Select(g => new { ReleaseId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.ReleaseId, x => x.Count);
+
+        _loading = false;
     }
 
+    /// <summary>
+    /// A release with no staged notes has no rows to group, so it is absent from the dictionary
+    /// rather than present with zero.
+    /// </summary>
     private string NoteCount(Guid releaseId) =>
-        _noteCounts.TryGetValue(releaseId, out var count)
-            ? count == 0 ? "none, needs a changelog" : $"{count} section(s)"
-            : "unknown";
+        _noteCounts.GetValueOrDefault(releaseId) is var count && count == 0
+            ? "none, needs a changelog"
+            : $"{count} section(s)";
+
+    private void OpenChangelog(FirmwareRelease release)
+    {
+        _changelogReleaseId = release.Id;
+        _changelogVersion = release.Version;
+        _changelog = string.Empty;
+        _changelogOpen = true;
+    }
+
+    private void CloseChangelog()
+    {
+        _changelogOpen = false;
+        _changelogReleaseId = null;
+        _changelog = string.Empty;
+    }
 
     private async Task FixChangelogAsync()
     {
-        if (ChangelogInput!.ReleaseId is not { } releaseId)
+        if (_changelogReleaseId is not { } releaseId) return;
+
+        await using (var scope = CreateScope())
         {
-            Report("Pick a release.", string.Empty);
-            return;
+            var result = await scope.Get<ReleaseAdminService>().FixChangelogAsync(releaseId, _changelog);
+
+            Report(
+                result.Match<string?>(
+                    _ => null,
+                    _ => "That release no longer exists.",
+                    notEditable => $"Release is {notEditable.Status.ToString().ToLowerInvariant()}, " +
+                                   "which cannot be edited.",
+                    ChangelogMessage),
+                "Saved. The release is back in staging and can be published.");
         }
 
-        var result = await ReleaseService.FixChangelogAsync(releaseId, ChangelogInput.Changelog);
-
-        Report(
-            result.Match<string?>(
-                _ => null,
-                _ => "That release no longer exists.",
-                notEditable => $"Release is {notEditable.Status.ToString().ToLowerInvariant()}, " +
-                               "which cannot be edited.",
-                invalid => ChangelogMessage(invalid)),
-            "Saved. The release is back in staging and can be published.");
-
-        ChangelogInput = new ChangelogInputModel();
+        CloseChangelog();
         await LoadAsync();
     }
 
@@ -184,28 +211,24 @@
 
     private async Task DeleteVersionAsync(string version)
     {
-        var result = await ReleaseService.DeleteVersionAsync(version);
+        var confirmed = await ConfirmAsync(
+            "Unpublish version",
+            $"Stop serving {version}? Artifacts stay in storage.",
+            confirmText: "Unpublish");
 
-        Report(
-            result.Match<string?>(
-                _ => null,
-                _ => "That version no longer exists."),
-            $"Unpublished {version}.");
+        if (!confirmed) return;
+
+        await using (var scope = CreateScope())
+        {
+            var result = await scope.Get<ReleaseAdminService>().DeleteVersionAsync(version);
+
+            Report(
+                result.Match<string?>(
+                    _ => null,
+                    _ => "That version no longer exists."),
+                $"Unpublished {version}.");
+        }
 
         await LoadAsync();
     }
-
-    private void Report(string? error, string success)
-    {
-        _error = error;
-        _message = error is null ? success : null;
-    }
-
-    private sealed class ChangelogInputModel
-    {
-        public Guid? ReleaseId { get; set; }
-        public string Changelog { get; set; } = string.Empty;
-    }
-
-    private sealed class EmptyInput;
 }

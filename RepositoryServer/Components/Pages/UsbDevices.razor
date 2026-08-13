@@ -1,109 +1,145 @@
 @page "/admin/firmware/usb-devices"
 @attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
-@inject CatalogAdminService Catalog
+@inherits AdminPageBase
 
-<h2>USB devices</h2>
+<PageHeader Title="USB devices">
+    <Subtitle>
+        Recognition catalog. A VID and PID pair identifies a USB interface, either a chip's native USB or a
+        board's serial converter. Saving an existing pair renames it rather than adding a second row.
+    </Subtitle>
+    <Actions>
+        <BbButton OnClick="OpenCreate">Add device</BbButton>
+    </Actions>
+</PageHeader>
 
-<p class="muted">
-    Recognition catalog. A VID and PID pair identifies a USB interface, either a chip's native USB or a
-    board's serial converter. Saving an existing pair renames it rather than adding a second row.
-</p>
+<BbCard Class="w-full overflow-hidden p-0">
+    <BbDataGrid TData="UsbDevice" Items="_devices" IsLoading="_loading" Striped="true" StickyHeader="true"
+                ShowSearch="true" SearchPlaceholder="Search devices">
+        <EmptyTemplate>
+            <div class="flex flex-col items-center gap-3 py-12 text-center">
+                <p class="text-muted-foreground">No USB devices yet.</p>
+                <BbButton Variant="ButtonVariant.Outline" OnClick="OpenCreate">Add the first device</BbButton>
+            </div>
+        </EmptyTemplate>
+        <Columns>
+            <BbDataGridPropertyColumn TData="UsbDevice" TProp="int" Property="d => d.Vid" Title="VID">
+                <CellTemplate>
+                    <code>@Hex(context.Vid)</code>
+                </CellTemplate>
+            </BbDataGridPropertyColumn>
+            <BbDataGridPropertyColumn TData="UsbDevice" TProp="int" Property="d => d.Pid" Title="PID">
+                <CellTemplate>
+                    <code>@Hex(context.Pid)</code>
+                </CellTemplate>
+            </BbDataGridPropertyColumn>
+            <BbDataGridPropertyColumn TData="UsbDevice" TProp="string" Property="d => d.Name" Title="Name"/>
+            <BbDataGridTemplateColumn TData="UsbDevice" Title="" Sortable="false" Width="0">
+                <div class="flex justify-end gap-1">
+                    <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall" OnClick="() => OpenEdit(context)" AriaLabel="Edit" title="Edit">
+                        <Glyph Name="IconName.Pencil"/>
+                    </BbButton>
+                    <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall" Class="text-destructive" OnClick="() => DeleteAsync(context)" AriaLabel="Delete" title="Delete">
+                        <Glyph Name="IconName.Trash"/>
+                    </BbButton>
+                </div>
+            </BbDataGridTemplateColumn>
+        </Columns>
+    </BbDataGrid>
+</BbCard>
 
-<StatusAlert Error="@_error" Message="@_message"/>
+<BbDialog @bind-Open="_formOpen">
+    <BbDialogContent Class="sm:max-w-md">
+        <BbDialogHeader>
+            <BbDialogTitle>@(_editing ? $"Edit {_name}" : "Add a USB device")</BbDialogTitle>
+            <BbDialogDescription>
+                Saving a VID and PID pair that already exists renames it rather than adding a second row.
+            </BbDialogDescription>
+        </BbDialogHeader>
 
-<table>
-    <thead>
-    <tr>
-        <th>VID</th>
-        <th>PID</th>
-        <th>Name</th>
-        <th></th>
-    </tr>
-    </thead>
-    <tbody>
-    @foreach (var device in _devices)
-    {
-        <tr>
-            <td><code>@Hex(device.Vid)</code></td>
-            <td><code>@Hex(device.Pid)</code></td>
-            <td>@device.Name</td>
-            <td>
-                <EditForm FormName="@($"delete-usb-device-{device.Id}")" Model="_deleteModel"
-                          OnValidSubmit="() => DeleteAsync(device.Id)">
-                    <AntiforgeryToken/>
-                    <button type="submit" class="danger">Delete</button>
-                </EditForm>
-            </td>
-        </tr>
-    }
-    @if (_devices.Length == 0)
-    {
-        <tr>
-            <td colspan="4" class="empty">No USB devices.</td>
-        </tr>
-    }
-    </tbody>
-</table>
+        <div class="flex flex-col gap-4 py-2">
+            <div class="flex flex-col gap-2">
+                <BbLabel For="vid">VID</BbLabel>
+                <BbInput Id="vid" @bind-Value="_vid" Placeholder="0x1A86"/>
+            </div>
+            <div class="flex flex-col gap-2">
+                <BbLabel For="pid">PID</BbLabel>
+                <BbInput Id="pid" @bind-Value="_pid" Placeholder="0x7522"/>
+            </div>
+            <div class="flex flex-col gap-2">
+                <BbLabel For="name">Name</BbLabel>
+                <BbInput Id="name" @bind-Value="_name" Placeholder="CH9102"/>
+            </div>
+        </div>
 
-<h3>Add or rename</h3>
-
-<EditForm FormName="upsert-usb-device" Model="UpsertInput!" OnValidSubmit="UpsertAsync" class="stack">
-    <AntiforgeryToken/>
-    <label>
-        VID
-        <InputText @bind-Value="UpsertInput!.Vid" placeholder="0x1A86"/>
-    </label>
-    <label>
-        PID
-        <InputText @bind-Value="UpsertInput!.Pid" placeholder="0x7522"/>
-    </label>
-    <label>
-        Name
-        <InputText @bind-Value="UpsertInput!.Name" placeholder="CH9102"/>
-    </label>
-    <button type="submit">Save</button>
-</EditForm>
+        <BbDialogFooter>
+            <BbButton Variant="ButtonVariant.Outline" OnClick="() => _formOpen = false">Cancel</BbButton>
+            <BbButton OnClick="UpsertAsync">Save</BbButton>
+        </BbDialogFooter>
+    </BbDialogContent>
+</BbDialog>
 
 @code {
     private UsbDevice[] _devices = [];
-    private string? _error;
-    private string? _message;
+    private bool _loading = true;
 
-    // No initializer: the binder assigns this on every post and would overwrite one with null (BL0008).
-    [SupplyParameterFromForm]
-    private UsbDeviceInput? UpsertInput { get; set; }
+    private bool _formOpen;
+    private bool _editing;
+    private string _vid = string.Empty;
+    private string _pid = string.Empty;
+    private string _name = string.Empty;
 
-    /// <summary>Satisfies EditForm on the delete buttons, which carry an id and no fields.</summary>
-    private readonly EmptyInput _deleteModel = new();
+    protected override Task OnInitializedAsync() => LoadAsync();
 
-    protected override async Task OnInitializedAsync()
+    private async Task LoadAsync()
     {
-        UpsertInput ??= new UsbDeviceInput();
-        await LoadAsync();
+        _loading = true;
+        await using var scope = CreateScope();
+        _devices = await scope.Get<CatalogAdminService>().ListUsbDevicesAsync();
+        _loading = false;
     }
-
-    private async Task LoadAsync() => _devices = await Catalog.ListUsbDevicesAsync();
 
     private static string Hex(int value) => $"0x{value:X4}";
 
+    private void OpenCreate()
+    {
+        _editing = false;
+        _vid = _pid = _name = string.Empty;
+        _formOpen = true;
+    }
+
+    private void OpenEdit(UsbDevice device)
+    {
+        _editing = true;
+        _vid = Hex(device.Vid);
+        _pid = Hex(device.Pid);
+        _name = device.Name;
+        _formOpen = true;
+    }
+
     private async Task UpsertAsync()
     {
-        if (!UsbIdentifier.TryParse(UpsertInput!.Vid, out var vid) ||
-            !UsbIdentifier.TryParse(UpsertInput.Pid, out var pid))
+        if (!UsbIdentifier.TryParse(_vid, out var vid) || !UsbIdentifier.TryParse(_pid, out var pid))
         {
-            Report("VID and PID must be numbers, in hex (0x1A86) or decimal.", string.Empty);
+            ReportError("VID and PID must be numbers, in hex (0x1A86) or decimal.");
             return;
         }
 
-        await Catalog.UpsertUsbDeviceAsync(vid, pid, UpsertInput.Name);
+        await using (var scope = CreateScope())
+        {
+            await scope.Get<CatalogAdminService>().UpsertUsbDeviceAsync(vid, pid, _name);
+        }
+
         Report(null, "Saved.");
-        UpsertInput = new UsbDeviceInput();
+        _formOpen = false;
         await LoadAsync();
     }
 
-    private async Task DeleteAsync(Guid id)
+    private async Task DeleteAsync(UsbDevice device)
     {
-        var result = await Catalog.DeleteUsbDeviceAsync(id);
+        if (!await ConfirmAsync("Delete USB device", $"Delete {device.Name}?")) return;
+
+        await using var scope = CreateScope();
+        var result = await scope.Get<CatalogAdminService>().DeleteUsbDeviceAsync(device.Id);
 
         Report(
             result.Match<string?>(
@@ -113,19 +149,4 @@
             "Deleted.");
         await LoadAsync();
     }
-
-    private void Report(string? error, string success)
-    {
-        _error = error;
-        _message = error is null ? success : null;
-    }
-
-    private sealed class UsbDeviceInput
-    {
-        public string Vid { get; set; } = string.Empty;
-        public string Pid { get; set; } = string.Empty;
-        public string Name { get; set; } = string.Empty;
-    }
-
-    private sealed class EmptyInput;
 }

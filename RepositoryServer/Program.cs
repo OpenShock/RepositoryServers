@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using BlazorBlueprint.Components;
 using OpenShock.Internal.Common.ExceptionHandling;
 using OpenShock.Internal.Common.Utils;
 using OpenShock.RepositoryServer;
@@ -47,6 +48,11 @@ builder.Host.UseDefaultServiceProvider((_, options) =>
 // Since we use slim builders, this allows for HTTPS
 builder.WebHost.UseKestrelHttpsConfiguration();
 
+// Also absent from the slim builder. Without it the _content/** assets that packages contribute,
+// Blazor Blueprint's stylesheet among them, are not on disk next to the app during development and
+// the admin UI renders unstyled.
+builder.WebHost.UseStaticWebAssets();
+
 builder.WebHost.ConfigureKestrel(serverOptions =>
 {
     serverOptions.Limits.RequestHeadersTimeout = TimeSpan.FromMilliseconds(3000);
@@ -69,23 +75,23 @@ builder.Services.AddSingleton<Microsoft.AspNetCore.Diagnostics.IExceptionHandler
 // The admin bypass exists only in Debug builds, only in Development, and only when asked for.
 // Release builds do not contain the handler at all, so the published image cannot be talked into it.
 #if DEBUG
-var devAdminBypass = isDevelopment && config.DevAuth.BypassAuthentik;
+var devAdminBypass = isDevelopment && config.DevAuth.BypassLogin;
 #else
 const bool devAdminBypass = false;
 #endif
 
-if (!devAdminBypass && config.Authentik is null)
+if (!devAdminBypass && config.GitHub is null)
 {
-    Console.WriteLine("Error validating config: the Authentik section is required.");
+    Console.WriteLine("Error validating config: the GitHub section is required.");
     Console.WriteLine("Admin endpoints have no other credential, so a server without it cannot be administered.");
-    Console.WriteLine("For local development, run in the Development environment with DevAuth:BypassAuthentik=true.");
+    Console.WriteLine("For local development, run in the Development environment with DevAuth:BypassLogin=true.");
     Environment.Exit(-10);
 }
 
 if (devAdminBypass)
 {
     Console.WriteLine("###############################################################");
-    Console.WriteLine("# AUTHENTIK BYPASS ACTIVE. Every caller is an administrator.  #");
+    Console.WriteLine("# LOGIN BYPASS ACTIVE. Every caller is an administrator.      #");
     Console.WriteLine("# Development builds only. Never expose this to a network.    #");
     Console.WriteLine("###############################################################");
 }
@@ -105,25 +111,25 @@ if (devAdminBypass)
 }
 else
 {
-    var authentik = config.Authentik!;
+    var github = config.GitHub!;
 
     authenticationBuilder
         .AddCookie(AuthSchemas.AdminCookie, options =>
         {
-            AuthentikAuthentication.ConfigureCookie(options, authentik);
+            GitHubAuthentication.ConfigureCookie(options, github);
         })
-        .AddOpenIdConnect(AuthSchemas.AdminOidc, options =>
+        .AddGitHub(AuthSchemas.AdminOAuth, options =>
         {
-            AuthentikAuthentication.ConfigureOidc(options, authentik);
+            GitHubAuthentication.ConfigureOAuth(options, github);
         });
 
     // Session cookies are encrypted with data protection keys. Left at the default they live in the
     // container filesystem, so every replica mints cookies the others reject and a rollout logs
     // everyone out. Persisting them to a shared volume is what makes more than one replica viable.
-    if (!string.IsNullOrWhiteSpace(authentik.DataProtectionKeyPath))
+    if (!string.IsNullOrWhiteSpace(github.DataProtectionKeyPath))
     {
         builder.Services.AddDataProtection()
-            .PersistKeysToFileSystem(new DirectoryInfo(authentik.DataProtectionKeyPath))
+            .PersistKeysToFileSystem(new DirectoryInfo(github.DataProtectionKeyPath))
             .SetApplicationName("OpenShock.RepositoryServer");
     }
 }
@@ -133,15 +139,15 @@ authenticationBuilder.AddJwtBearer(AuthSchemas.CiCdToken, options =>
     GitHubOidcAuthentication.Configure(options, config.CiCd.Audience);
 });
 
-var adminGroup = config.Authentik?.AdminGroup ?? AdminAuthMode.DevFallbackGroup;
+var adminTeam = config.GitHub?.Team ?? AdminAuthMode.DevFallbackTeam;
 
 builder.Services.AddAuthorizationBuilder()
-    // Admin endpoints authorize against the session cookie, never against the OIDC scheme: by the
-    // time a request carries a session, Authentik's part is finished.
+    // Admin endpoints authorize against the session cookie, never against the OAuth scheme: by the
+    // time a request carries a session, GitHub's part is finished.
     .AddPolicy(AuthSchemas.Policies.Admin, policy => policy
         .AddAuthenticationSchemes(AuthSchemas.AdminCookie)
         .RequireAuthenticatedUser()
-        .RequireClaim(AuthSchemas.AdminClaims.Group, adminGroup))
+        .RequireClaim(AuthSchemas.AdminClaims.Team, adminTeam))
     // Firmware and desktop ingestion share the CI/CD scheme, so being authenticated is not enough:
     // each endpoint requires the scope its grant was issued for.
     .AddPolicy(AuthSchemas.Policies.PublishFirmware, policy => policy
@@ -161,11 +167,12 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new SemVersionConverter());
 });
 
-// Admin UI. Static server-side rendering only, no interactive render mode and no Blazor script: an
-// unauthenticated request is turned away by the authorization middleware at the endpoint, so no
-// markup is produced for anyone who is not already an admin.
-builder.Services.AddRazorComponents();
+// Admin UI. Interactive server rendering: the pages call the admin services and EF Core directly,
+// and there is no admin HTTP API for a client-side runtime to talk to. Pages carry the admin policy
+// as endpoint metadata, so the gate closes before anything renders.
+builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddCascadingAuthenticationState();
+builder.Services.AddBlazorBlueprintComponents();
 
 builder.Services.AddControllers().AddJsonOptions(x =>
 {
@@ -188,9 +195,9 @@ apiVersioningBuilder.AddApiExplorer(setup =>
     setup.AssumeDefaultVersionWhenUnspecified = true;
 });
 
-// The OIDC redirect_uri is built from the incoming request, so behind an ingress that terminates TLS
-// the server would otherwise send Authentik an http:// callback that does not match what is
-// registered, and the login fails at the last hop.
+// The OAuth redirect_uri is built from the incoming request, so behind an ingress that terminates
+// TLS the server would otherwise send GitHub an http:// callback that does not match the one
+// registered on the OAuth app, and the login fails at the last hop.
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto |
@@ -367,6 +374,17 @@ app.UseWebSockets(new WebSocketOptions
     KeepAliveInterval = TimeSpan.FromMinutes(1)
 });
 app.UseRouting();
+
+// Serves blazor.web.js and MudBlazor's bundled css/js out of the packages' static web assets.
+// Deliberately the middleware rather than MapStaticAssets(): the endpoint-routing variant needs the
+// build-time asset manifest, which resolves against the content root, and under
+// WebApplicationFactory that is the test project. It came up empty there and swallowed every
+// controller route, 404ing the whole API. This has no manifest to miss.
+//
+// Ahead of authentication on purpose. These are framework files, identical for every deployment,
+// and the admin pages need their stylesheet before there is a session to check.
+app.UseStaticFiles();
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -386,7 +404,7 @@ app.UseAntiforgery();
 
 app.MapOpenApi();
 app.MapControllers();
-app.MapRazorComponents<App>();
+app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
 app.MapScalarApiReference(options => options.AddDocument("1"));
 

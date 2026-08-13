@@ -13,12 +13,12 @@ public static class AuthResultError
         "An admin session is required", HttpStatusCode.Unauthorized,
         "Sign in at /auth/login.");
 
-    /// <summary>Authenticated with Authentik, but outside the configured admin group.</summary>
+    /// <summary>Authenticated with GitHub, but outside the configured admin team.</summary>
     public static OpenShockProblem NotAnAdmin => new("Authentication.NotAnAdmin",
         "Account is not an administrator", HttpStatusCode.Forbidden,
         "This account is not a member of the group required to administer this server.");
 
-    /// <summary>The round trip to Authentik did not complete. Detail is deliberately vague.</summary>
+    /// <summary>The round trip to GitHub did not complete. Detail is deliberately vague.</summary>
     public static OpenShockProblem LoginFailed => new("Authentication.LoginFailed",
         "Login failed", HttpStatusCode.BadRequest,
         "The login could not be completed. Try again.");

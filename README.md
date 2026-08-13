@@ -44,13 +44,13 @@ through `appsettings.Custom.json`, user secrets or command line arguments.
 | `OPENSHOCK__DB__CONN`                 | x        |                                      | `Host=postgres-server-host;Port=5432;Database=repo-server;Username=openshock;Password=superSecurePassword` |
 | `OPENSHOCK__DB__SKIPMIGRATION`        |          | `false`                              | `true`, `false`                                                                                            |
 | `OPENSHOCK__DB__DEBUG`                |          | `false`                              | `true`, `false`                                                                                            |
-| `OPENSHOCK__AUTHENTIK__AUTHORITY`     | x        |                                      | `https://authentik.example.net/application/o/repository-server/`                                           |
-| `OPENSHOCK__AUTHENTIK__CLIENTID`      | x        |                                      | Client ID of the Authentik OAuth2 provider                                                                 |
-| `OPENSHOCK__AUTHENTIK__CLIENTSECRET`  | x        |                                      | Client secret of the same provider                                                                         |
-| `OPENSHOCK__AUTHENTIK__ADMINGROUP`    | x        |                                      | `openshock-repo-admins`                                                                                    |
-| `OPENSHOCK__AUTHENTIK__SESSIONLIFETIME` |        | `08:00:00`                           | How long an admin session lasts before a fresh login                                                       |
-| `OPENSHOCK__AUTHENTIK__DATAPROTECTIONKEYPATH` |  |                                      | Shared path for cookie encryption keys, required for more than one replica                                 |
-| `OPENSHOCK__AUTHENTIK__REQUIREHTTPSMETADATA` |   | `true`                               | `false` only for local development against an Authentik without TLS                                        |
+| `OPENSHOCK__GITHUB__CLIENTID`         | x        |                                      | Client ID of the GitHub OAuth app                                                                          |
+| `OPENSHOCK__GITHUB__CLIENTSECRET`     | x        |                                      | Client secret of the same app                                                                              |
+| `OPENSHOCK__GITHUB__ORGANIZATION`     | x        |                                      | `OpenShock`                                                                                                |
+| `OPENSHOCK__GITHUB__TEAM`             | x        |                                      | Team **slug** whose members are admins, e.g. `repo-maintainers`                                            |
+| `OPENSHOCK__GITHUB__CALLBACKPATH`     |          | `/auth/callback`                     | Must match the callback URL registered on the OAuth app                                                    |
+| `OPENSHOCK__GITHUB__SESSIONLIFETIME`  |          | `08:00:00`                           | How long an admin session lasts before a fresh login                                                       |
+| `OPENSHOCK__GITHUB__DATAPROTECTIONKEYPATH` |     |                                      | Shared path for cookie encryption keys, required for more than one replica                                 |
 | `OPENSHOCK__CICD__AUDIENCE`           | x        | `openshock-repository-server`        | Audience that publishing workflows request their OIDC token for                                            |
 | `OPENSHOCK__FIRMWARE__CDNBASEURL`     | x        | `https://cdn.openshock.app/firmware` | Public base URL firmware artifacts are served from                                                         |
 | `OPENSHOCK__FIRMWARE__STORAGE__TYPE`  | x        | `Local`                              | `Local`, `S3`, `BunnyCdn`                                                                                  |
@@ -114,39 +114,48 @@ networks in `OPENSHOCK__METRICS__ALLOWEDNETWORKS`.
 
 There are two schemes, and they do not overlap.
 
-## Admin, through Authentik
+## Admin, through GitHub
 
-Admin endpoints require a session established by an OpenID Connect login against Authentik. There is
-no static token and no other credential.
+Admin endpoints require a session established by a GitHub OAuth login. There is no static token and
+no other credential.
 
 ```
-GET /auth/login    starts the login, redirects to Authentik
-GET /auth/logout   ends the local session and the Authentik one behind it
+GET /auth/login    starts the login, redirects to GitHub
+GET /auth/logout   ends the local session
 GET /auth/me       reports the current session
 ```
 
-The login is an authorization code flow with PKCE. The code is exchanged server-side, so no token
-reaches the browser; what the browser holds is an encrypted session cookie. Group membership is read
-once at login and checked against `OPENSHOCK__AUTHENTIK__ADMINGROUP`. An account outside that group
-is refused at the callback rather than being handed a session that cannot do anything.
+The login is an authorization code flow. The code is exchanged server-side, so no token reaches the
+browser; what the browser holds is an encrypted session cookie. Team membership is checked once at
+login against `/orgs/{org}/teams/{team}/memberships/{login}`, using
+`OPENSHOCK__GITHUB__ORGANIZATION` and `OPENSHOCK__GITHUB__TEAM`. An account outside the team is
+refused at the callback rather than being handed a session that cannot do anything.
 
-Two consequences worth knowing:
+Four consequences worth knowing:
 
-- Membership is captured at login, so removing someone from the admin group in Authentik takes effect
-  when their session expires, not immediately. `SESSIONLIFETIME` bounds that window.
-- The provider must be configured to emit a `groups` claim. Without it every login is rejected, since
-  nothing can satisfy the policy.
+- Membership is captured at login, so removing someone from the team takes effect when their session
+  expires, not immediately. `SESSIONLIFETIME` bounds that window.
+- `TEAM` is the team **slug**, the form that appears in the URL. A team displayed as
+  "Repo Maintainers" is `repo-maintainers`; the display name will not resolve.
+- Only an `active` membership counts. Someone invited to the team but who has not accepted is
+  `pending`, and is refused.
+- Logout is local only. GitHub has no front-channel logout for OAuth apps, so the account stays
+  signed in to GitHub and a later `/auth/login` will sign it straight back in without a prompt.
+  Revoking the grant properly is done from the account's authorized-apps settings.
 
-Authentik setup: create an OAuth2/OpenID provider with a confidential client, redirect URI
-`https://your-server/auth/callback`, and a scope mapping that emits `groups`. Point an application at
-it and bind the admin group.
+GitHub setup: create an OAuth app (Settings → Developer settings → OAuth Apps) with authorization
+callback URL `https://your-server/auth/callback`. The login requests the `read:org` scope, which is
+what makes the team membership endpoint answer; without it GitHub returns 404 for a team the user is
+genuinely in, which is indistinguishable from not being a member. If the org enforces OAuth app
+access restrictions, the app has to be approved for the org or every membership check comes back
+404.
 
 ### Admin UI
 
 Administration is the UI at `/admin`. There are no admin endpoints: the pages call the admin services
-directly, so there is no second surface to keep in step. The pages are rendered server-side with no
-client-side framework and no JavaScript, and each carries the admin policy as endpoint metadata, so an
-unauthenticated visitor is redirected to Authentik before any markup is produced.
+directly, so there is no second surface to keep in step. The pages render interactively over a
+Blazor server circuit, and each carries the admin policy as endpoint metadata, so an unauthenticated
+visitor is turned away at the endpoint before any markup is produced.
 
 It is grouped as shared, firmware and desktop:
 
@@ -281,7 +290,7 @@ dotnet run --project RepositoryServer
 ```
 
 The Development profile listens on `http://localhost:5080`, applies migrations on startup, and prints
-a banner confirming the Authentik bypass. Port 5433 keeps this out of the way of a local OpenShock API
+a banner confirming the login bypass. Port 5433 keeps this out of the way of a local OpenShock API
 stack, which uses 5432.
 
 | URL | What it is |
@@ -290,11 +299,11 @@ stack, which uses 5432.
 | `http://localhost:5080/auth/me` | Current session, useful for checking the bypass took |
 | `http://localhost:5080/scalar` | API reference |
 
-## Authentik bypass
+## Login bypass
 
-`appsettings.Development.json` sets `DevAuth:BypassAuthentik`, which replaces the Authentik login with
-a handler that treats every caller as an administrator, so local work needs no identity provider at
-all. Set it to `false` to exercise the real login against an Authentik instance.
+`appsettings.Development.json` sets `DevAuth:BypassLogin`, which replaces the GitHub login with a
+handler that treats every caller as an administrator, so local work needs no OAuth app at all. Set it
+to `false` to exercise the real login against GitHub.
 
 Three separate things have to line up for it to do anything:
 

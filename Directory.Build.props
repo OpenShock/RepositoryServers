@@ -1,0 +1,53 @@
+<Project>
+  <PropertyGroup>
+    <Company>OpenShock</Company>
+    <Product>$(Company).$(MSBuildProjectName)</Product>
+    <Version>1.0.0</Version>
+
+    <Title>$(Product)</Title>
+    <Authors>OpenShock</Authors>
+    <Description>Repository server for the OpenShock solution, serving firmware and desktop module distribution.</Description>
+    <RepositoryUrl>https://github.com/OpenShock/RepositoryServer</RepositoryUrl>
+    <PackageProjectUrl>https://openshock.org</PackageProjectUrl>
+    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
+    <RepositoryType>git</RepositoryType>
+    <PackageTags>openshock</PackageTags>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>default</LangVersion>
+    <Nullable>enable</Nullable>
+    <!--
+      Derived rather than set per project: RepositoryServer becomes OpenShock.RepositoryServer and
+      RepositoryServer.Tests becomes OpenShock.RepositoryServer.Tests, which is what the
+      InternalsVisibleTo in RepositoryServer.csproj names.
+    -->
+    <AssemblyName>$(Product)</AssemblyName>
+    <RootNamespace>$(Product.Replace(" ", "_"))</RootNamespace>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
+    <UserSecretsId>1e9d69ec-a751-45af-9dd2-312cc9964162</UserSecretsId>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <!-- Disable Missing XML comment warning -->
+    <NoWarn>1591</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <!--
+      Not TreatWarningsAsErrors like API/Directory.Build.props: the Asp.Versioning analyzers emit
+      AV0013/AV0014/AV0029/AV0030 against this project's controller and OpenAPI setup, so turning it
+      on fails the build until those are addressed.
+    -->
+
+    <!-- Disable Prefer framework type warning -->
+    <NoWarn>$(NoWarn);IDE0049</NoWarn>
+  </PropertyGroup>
+</Project>

@@ -7,31 +7,31 @@ using Microsoft.Extensions.Options;
 namespace OpenShock.RepositoryServer.Tests.Integration;
 
 /// <summary>
-/// Stands in for the Authentik session cookie on the <see cref="AuthSchemas.AdminCookie"/> scheme.
+/// Stands in for the GitHub session cookie on the <see cref="AuthSchemas.AdminCookie"/> scheme.
 /// </summary>
 /// <remarks>
-/// The real scheme holds a cookie minted at the end of an OpenID Connect round trip that a test
-/// cannot perform: it would need a live Authentik to sign the id token. This handler substitutes only
-/// that half, producing the same principal the login would have produced, so the authorization policy
-/// and every admin endpoint behind it run for real against the claims production emits.
+/// The real scheme holds a cookie minted at the end of an OAuth round trip that a test cannot
+/// perform: it would need to talk to GitHub. This handler substitutes only that half, producing the
+/// same principal the login would have produced, so the authorization policy and every admin
+/// endpoint behind it run for real against the claims production emits.
 ///
-/// What it deliberately does not cover is the login itself: group extraction, the rejection of users
-/// outside the admin group, and the claim trimming all live in
-/// <c>AuthentikAuthentication.OnTicketReceived</c> and are exercised by unit tests instead.
+/// What it deliberately does not cover is the login itself: the team membership check, the rejection
+/// of users outside the team, and the claim trimming all live in
+/// <c>GitHubAuthentication.OnCreatingTicket</c>.
 /// </remarks>
 public sealed class TestAdminAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
-    /// <summary>Group the test host is configured to treat as admin.</summary>
-    public const string AdminGroup = "repo-server-admins";
+    /// <summary>Team slug the test host is configured to treat as admin.</summary>
+    public const string AdminTeam = "repo-server-admins";
 
     /// <summary>Presence of this header is what makes a request authenticated at all.</summary>
     public const string UserHeader = "X-Test-Admin-User";
 
     /// <summary>
-    /// Overrides the group claim, so a test can present a session that authenticated but does not
+    /// Overrides the team claim, so a test can present a session that authenticated but does not
     /// satisfy the admin policy.
     /// </summary>
-    public const string GroupHeader = "X-Test-Admin-Group";
+    public const string TeamHeader = "X-Test-Admin-Team";
 
     public TestAdminAuthHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
@@ -49,19 +49,19 @@ public sealed class TestAdminAuthHandler : AuthenticationHandler<AuthenticationS
         }
 
         var username = rawUser.ToString();
-        var group = Request.Headers.TryGetValue(GroupHeader, out var rawGroup) && !string.IsNullOrWhiteSpace(rawGroup)
-            ? rawGroup.ToString()
-            : AdminGroup;
+        var team = Request.Headers.TryGetValue(TeamHeader, out var rawTeam) && !string.IsNullOrWhiteSpace(rawTeam)
+            ? rawTeam.ToString()
+            : AdminTeam;
 
         var claims = new List<Claim>
         {
             new(AuthSchemas.AdminClaims.Subject, username),
             new(AuthSchemas.AdminClaims.Username, username),
-            new(AuthSchemas.AdminClaims.Group, group)
+            new(AuthSchemas.AdminClaims.Team, team)
         };
 
         var identity = new ClaimsIdentity(claims, Scheme.Name,
-            AuthSchemas.AdminClaims.Username, AuthSchemas.AdminClaims.Group);
+            AuthSchemas.AdminClaims.Username, AuthSchemas.AdminClaims.Team);
         var principal = new ClaimsPrincipal(identity);
 
         return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(principal, Scheme.Name)));

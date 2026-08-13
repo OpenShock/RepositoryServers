@@ -1,139 +1,180 @@
 @page "/admin/firmware/boards"
 @attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
-@inject CatalogAdminService Catalog
+@inherits AdminPageBase
 
-<h2>Boards</h2>
+<PageHeader Title="Boards">
+    <Subtitle>
+        A board's name is what a hub reports as its own, compiled in as <code>OPENSHOCK_FW_BOARD</code>, so
+        it has to match the <code>[env:...]</code> name in the firmware repository exactly. It is also the
+        board's segment in artifact URLs, so only URL-safe characters are accepted.
+    </Subtitle>
+    <Actions>
+        <BbButton OnClick="OpenCreate">Add board</BbButton>
+    </Actions>
+</PageHeader>
 
-<p class="muted">
-    A board's name is what a hub reports as its own, compiled in as <code>OPENSHOCK_FW_BOARD</code>, so
-    it has to match the <code>[env:...]</code> name in the firmware repository exactly. It is also the
-    board's segment in artifact URLs, so only URL-safe characters are accepted.
-</p>
+<BbCard Class="w-full overflow-hidden p-0">
+        <BbDataGrid TData="FirmwareBoard" Items="_boards" IsLoading="_loading" Striped="true"
+                    StickyHeader="true">
+            <EmptyTemplate>
+                <BbAlert Variant="AlertVariant.Warning" Class="m-2">
+                    No boards. Release init rejects a board it does not know, so CI cannot publish yet.
+                </BbAlert>
+            </EmptyTemplate>
+            <Columns>
+                <BbDataGridPropertyColumn TData="FirmwareBoard" TProp="string" Property="b => b.Name"
+                                          Title="Name">
+                    <CellTemplate>
+                        <code>@context.Name</code>
+                    </CellTemplate>
+                </BbDataGridPropertyColumn>
+                <BbDataGridPropertyColumn TData="FirmwareBoard" TProp="string"
+                                          Property="b => b.ChipNavigation.Name" Title="Chip"/>
+                <BbDataGridTemplateColumn TData="FirmwareBoard" Title="Required artifacts" Sortable="false">
+                    @if (context.RequiredArtifactTypes.Length == 0)
+                    {
+                        <span class="text-sm text-muted-foreground">none</span>
+                    }
+                    else
+                    {
+                        <div class="flex flex-wrap gap-1">
+                            @foreach (var artifactType in context.RequiredArtifactTypes)
+                            {
+                                <BbBadge Variant="BadgeVariant.Outline">
+                                    @artifactType.ToString().ToLowerInvariant()
+                                </BbBadge>
+                            }
+                        </div>
+                    }
+                </BbDataGridTemplateColumn>
+                <BbDataGridTemplateColumn TData="FirmwareBoard" Title="USB devices" Sortable="false">
+                    <span class="text-muted-foreground">@AttachedDeviceNames(context.Id)</span>
+                </BbDataGridTemplateColumn>
+                <BbDataGridPropertyColumn TData="FirmwareBoard" TProp="bool" Property="b => b.Discontinued"
+                                          Title="Status">
+                    <CellTemplate>
+                        <BbBadge Variant="@(context.Discontinued ? BadgeVariant.Secondary : BadgeVariant.Default)">
+                            @(context.Discontinued ? "discontinued" : "active")
+                        </BbBadge>
+                    </CellTemplate>
+                </BbDataGridPropertyColumn>
+                <BbDataGridTemplateColumn TData="FirmwareBoard" Title="" Sortable="false" Width="0">
+                    <div class="flex justify-end gap-1">
+                        <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall" OnClick="() => OpenEdit(context)" AriaLabel="Edit" title="Edit">
+                        <Glyph Name="IconName.Pencil"/>
+                    </BbButton>
+                        <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall" OnClick="() => OpenAttach(context)" AriaLabel="USB devices" title="USB devices">
+                        <Glyph Name="IconName.Usb"/>
+                    </BbButton>
+                        <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.Small"
+                                  OnClick="() => SetDiscontinuedAsync(context)">
+                            @(context.Discontinued ? "Reinstate" : "Discontinue")
+                        </BbButton>
+                        <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall" Class="text-destructive" OnClick="() => DeleteAsync(context)" AriaLabel="Delete" title="Delete">
+                        <Glyph Name="IconName.Trash"/>
+                    </BbButton>
+                    </div>
+                </BbDataGridTemplateColumn>
+            </Columns>
+    </BbDataGrid>
+</BbCard>
 
-<StatusAlert Error="@_error" Message="@_message"/>
+<BbDialog @bind-Open="_formOpen">
+    <BbDialogContent Class="sm:max-w-md">
+        <BbDialogHeader>
+            <BbDialogTitle>@(_editingBoardId is null ? "Add a board" : $"Edit {_name}")</BbDialogTitle>
+            <BbDialogDescription>
+                The name must match the [env:...] name in the firmware repository exactly, and is also
+                the board's segment in artifact URLs.
+            </BbDialogDescription>
+        </BbDialogHeader>
 
-<table>
-    <thead>
-    <tr>
-        <th>Name</th>
-        <th>Chip</th>
-        <th>Required artifacts</th>
-        <th>USB devices</th>
-        <th>Status</th>
-        <th></th>
-    </tr>
-    </thead>
-    <tbody>
-    @foreach (var board in _boards)
-    {
-        <tr>
-            <td><code>@board.Name</code></td>
-            <td>@board.ChipNavigation.Name</td>
-            <td class="muted">@FormatArtifactTypes(board.RequiredArtifactTypes)</td>
-            <td class="muted">@AttachedDeviceNames(board.Id)</td>
-            <td>@(board.Discontinued ? "discontinued" : "active")</td>
-            <td class="actions">
-                <EditForm FormName="@($"discontinue-board-{board.Id}")" Model="_actionModel"
-                          OnValidSubmit="() => SetDiscontinuedAsync(board.Id, !board.Discontinued)">
-                    <AntiforgeryToken/>
-                    <button type="submit">@(board.Discontinued ? "Reinstate" : "Discontinue")</button>
-                </EditForm>
-                <EditForm FormName="@($"delete-board-{board.Id}")" Model="_actionModel"
-                          OnValidSubmit="() => DeleteAsync(board.Id)">
-                    <AntiforgeryToken/>
-                    <button type="submit" class="danger">Delete</button>
-                </EditForm>
-            </td>
-        </tr>
-    }
-    @if (_boards.Length == 0)
-    {
-        <tr>
-            <td colspan="6" class="empty">
-                No boards. Release init rejects a board it does not know, so CI cannot publish yet.
-            </td>
-        </tr>
-    }
-    </tbody>
-</table>
+        <div class="flex flex-col gap-4 py-2">
+            <div class="flex flex-col gap-2">
+                <BbLabel For="board-name">Name</BbLabel>
+                <BbInput Id="board-name" @bind-Value="_name" Placeholder="Wemos-D1-Mini-ESP32"/>
+            </div>
+            <div class="flex flex-col gap-2">
+                <BbLabel>Chip</BbLabel>
+                <BbSelect TValue="Guid?" @bind-Value="_chipId">
+                    <BbSelectTrigger TValue="Guid?">
+                        <BbSelectValue Placeholder="select a chip"/>
+                    </BbSelectTrigger>
+                    <BbSelectContent TValue="Guid?">
+                        @foreach (var chip in _chips)
+                        {
+                            <BbSelectItem TValue="Guid?" Value="@chip.Id" Text="@chip.Name"/>
+                        }
+                    </BbSelectContent>
+                </BbSelect>
+            </div>
+            <div class="flex flex-col gap-2">
+                <BbLabel>Required artifacts</BbLabel>
+                <p class="text-muted-foreground text-xs">
+                    What an OTA update must supply. Publish refuses a board missing any of these.
+                </p>
+                @foreach (var artifactType in ArtifactTypes)
+                {
+                    var current = artifactType;
+                    <div class="flex items-center gap-2">
+                        <BbCheckbox Id="@($"artifact-{current}")"
+                                    Checked="_requiredArtifactTypes.Contains(current)"
+                                    CheckedChanged="@(checkedNow => ToggleArtifactType(current, checkedNow))"/>
+                        <BbLabel For="@($"artifact-{current}")">
+                            @current.ToString().ToLowerInvariant()
+                        </BbLabel>
+                    </div>
+                }
+            </div>
+        </div>
 
-<h3>Add or edit</h3>
+        <BbDialogFooter>
+            <BbButton Variant="ButtonVariant.Outline" OnClick="() => _formOpen = false">Cancel</BbButton>
+            <BbButton OnClick="SaveAsync">Save</BbButton>
+        </BbDialogFooter>
+    </BbDialogContent>
+</BbDialog>
 
-<p class="muted">Saving a name that already exists updates that board instead of adding another.</p>
+<BbDialog @bind-Open="_attachOpen">
+    <BbDialogContent Class="sm:max-w-md">
+        <BbDialogHeader>
+            <BbDialogTitle>USB devices for @_attachBoardName</BbDialogTitle>
+            <BbDialogDescription>
+                On-board USB-to-serial converters, used to recognise the board in the flashtool.
+            </BbDialogDescription>
+        </BbDialogHeader>
 
-<EditForm FormName="save-board" Model="SaveInput!" OnValidSubmit="SaveAsync" class="stack">
-    <AntiforgeryToken/>
-    <label>
-        Board
-        <InputSelect @bind-Value="SaveInput!.BoardId">
-            <option value="">new board</option>
-            @foreach (var board in _boards)
-            {
-                <option value="@board.Id">@board.Name</option>
-            }
-        </InputSelect>
-    </label>
-    <label>
-        Name
-        <InputText @bind-Value="SaveInput!.Name" placeholder="Wemos-D1-Mini-ESP32"/>
-    </label>
-    <label>
-        Chip
-        <InputSelect @bind-Value="SaveInput!.ChipId">
-            <option value="">select</option>
-            @foreach (var chip in _chips)
-            {
-                <option value="@chip.Id">@chip.Name</option>
-            }
-        </InputSelect>
-    </label>
-    <fieldset>
-        <legend>Required artifacts</legend>
-        <span class="muted">What an OTA update must supply. Publish refuses a board missing any of these.</span>
-        @foreach (var artifactType in ArtifactTypes)
-        {
-            <label class="inline">
-                <input type="checkbox" name="SaveInput.RequiredArtifactTypes" value="@artifactType"
-                       checked="@(SaveInput!.RequiredArtifactTypes?.Contains(artifactType) == true)"/>
-                @artifactType.ToString().ToLowerInvariant()
-            </label>
-        }
-    </fieldset>
-    <button type="submit">Save</button>
-</EditForm>
+        <div class="flex flex-col gap-4 py-2">
+            <div class="flex flex-col gap-2">
+                <BbLabel>Currently attached</BbLabel>
+                <p class="text-muted-foreground text-sm">
+                    @(_attachBoardId is { } id ? AttachedDeviceNames(id) : "none")
+                </p>
+            </div>
+            <div class="flex flex-col gap-2">
+                <BbLabel>Device</BbLabel>
+                <BbSelect TValue="Guid?" @bind-Value="_attachDeviceId">
+                    <BbSelectTrigger TValue="Guid?">
+                        <BbSelectValue Placeholder="select a device"/>
+                    </BbSelectTrigger>
+                    <BbSelectContent TValue="Guid?">
+                        @foreach (var device in _usbDevices)
+                        {
+                            <BbSelectItem TValue="Guid?" Value="@device.Id"
+                                          Text="@($"{device.Name} ({Hex(device.Vid)}:{Hex(device.Pid)})")"/>
+                        }
+                    </BbSelectContent>
+                </BbSelect>
+            </div>
+        </div>
 
-<h3>USB devices</h3>
-
-<p class="muted">On-board USB-to-serial converters, used to recognise the board in the flashtool.</p>
-
-<EditForm FormName="attach-board-usb" Model="AttachInput!" OnValidSubmit="AttachAsync" class="stack">
-    <AntiforgeryToken/>
-    <label>
-        Board
-        <InputSelect @bind-Value="AttachInput!.BoardId">
-            <option value="">select</option>
-            @foreach (var board in _boards)
-            {
-                <option value="@board.Id">@board.Name</option>
-            }
-        </InputSelect>
-    </label>
-    <label>
-        Device
-        <InputSelect @bind-Value="AttachInput!.UsbDeviceId">
-            <option value="">select</option>
-            @foreach (var device in _usbDevices)
-            {
-                <option value="@device.Id">@device.Name (0x@device.Vid.ToString("X4"):0x@device.Pid.ToString("X4"))</option>
-            }
-        </InputSelect>
-    </label>
-    <label class="inline">
-        <InputCheckbox @bind-Value="AttachInput!.Detach"/>
-        detach instead
-    </label>
-    <button type="submit">Apply</button>
-</EditForm>
+        <BbDialogFooter>
+            <BbButton Variant="ButtonVariant.Outline"
+                      OnClick="() => ApplyAttachmentAsync(detach: true)">Detach</BbButton>
+            <BbButton OnClick="() => ApplyAttachmentAsync(detach: false)">Attach</BbButton>
+        </BbDialogFooter>
+    </BbDialogContent>
+</BbDialog>
 
 @code {
     private static readonly FirmwareArtifactType[] ArtifactTypes = Enum.GetValues<FirmwareArtifactType>();
@@ -142,36 +183,37 @@
     private FirmwareChip[] _chips = [];
     private UsbDevice[] _usbDevices = [];
     private FirmwareBoardUsbDevice[] _attachments = [];
-    private string? _error;
-    private string? _message;
+    private bool _loading = true;
 
-    // No initializer: the binder assigns these on every post and would overwrite one with null (BL0008).
-    [SupplyParameterFromForm(FormName = "save-board")]
-    private BoardInput? SaveInput { get; set; }
+    private bool _formOpen;
+    private bool _attachOpen;
+    private string _attachBoardName = string.Empty;
+    private Guid? _editingBoardId;
+    private string _name = string.Empty;
+    private Guid? _chipId;
+    private readonly HashSet<FirmwareArtifactType> _requiredArtifactTypes = [];
 
-    [SupplyParameterFromForm(FormName = "attach-board-usb")]
-    private AttachInputModel? AttachInput { get; set; }
+    private Guid? _attachBoardId;
+    private Guid? _attachDeviceId;
 
-    /// <summary>Satisfies EditForm on the row buttons, which carry an id and no fields.</summary>
-    private readonly EmptyInput _actionModel = new();
-
-    protected override async Task OnInitializedAsync()
-    {
-        SaveInput ??= new BoardInput();
-        AttachInput ??= new AttachInputModel();
-        await LoadAsync();
-    }
+    protected override Task OnInitializedAsync() => LoadAsync();
 
     private async Task LoadAsync()
     {
-        _boards = await Catalog.ListBoardsAsync();
-        _chips = await Catalog.ListChipsAsync();
-        _usbDevices = await Catalog.ListUsbDevicesAsync();
-        _attachments = await Catalog.ListBoardUsbDevicesAsync();
+        _loading = true;
+
+        await using var scope = CreateScope();
+        var catalog = scope.Get<CatalogAdminService>();
+
+        _boards = await catalog.ListBoardsAsync();
+        _chips = await catalog.ListChipsAsync();
+        _usbDevices = await catalog.ListUsbDevicesAsync();
+        _attachments = await catalog.ListBoardUsbDevicesAsync();
+
+        _loading = false;
     }
 
-    private static string FormatArtifactTypes(FirmwareArtifactType[] types) =>
-        types.Length == 0 ? "none" : string.Join(", ", types.Select(t => t.ToString().ToLowerInvariant()));
+    private static string Hex(int value) => $"0x{value:X4}";
 
     private string AttachedDeviceNames(Guid boardId)
     {
@@ -184,43 +226,85 @@
         return names.Length == 0 ? "none" : string.Join(", ", names);
     }
 
+    private void ToggleArtifactType(FirmwareArtifactType artifactType, bool selected)
+    {
+        if (selected) _requiredArtifactTypes.Add(artifactType);
+        else _requiredArtifactTypes.Remove(artifactType);
+    }
+
+    private void OpenCreate()
+    {
+        ResetForm();
+        _formOpen = true;
+    }
+
+    private void OpenAttach(FirmwareBoard board)
+    {
+        _attachBoardId = board.Id;
+        _attachBoardName = board.Name;
+        _attachDeviceId = null;
+        _attachOpen = true;
+    }
+
+    private void OpenEdit(FirmwareBoard board)
+    {
+        _formOpen = true;
+        _editingBoardId = board.Id;
+        _name = board.Name;
+        _chipId = board.ChipId;
+        _requiredArtifactTypes.Clear();
+        foreach (var artifactType in board.RequiredArtifactTypes) _requiredArtifactTypes.Add(artifactType);
+    }
+
+    private void ResetForm()
+    {
+        _editingBoardId = null;
+        _name = string.Empty;
+        _chipId = null;
+        _requiredArtifactTypes.Clear();
+    }
+
     private async Task SaveAsync()
     {
-        if (SaveInput!.ChipId is not { } chipId)
+        if (_chipId is not { } chipId)
         {
-            Report("Pick a chip.", string.Empty);
+            ReportError("Pick a chip.");
             return;
         }
 
-        // The binder nulls a collection property when the post carries none of its values, which
-        // is exactly what an all-unchecked set of checkboxes looks like.
-        var required = SaveInput.RequiredArtifactTypes?.ToArray() ?? [];
+        FirmwareArtifactType[] required = [.. _requiredArtifactTypes];
 
-        if (SaveInput.BoardId is { } boardId)
+        await using (var scope = CreateScope())
         {
-            var updated = await Catalog.UpdateBoardAsync(boardId, SaveInput.Name ?? string.Empty, chipId, required);
-            Report(
-                updated.Match<string?>(
-                    _ => null,
-                    _ => "That board no longer exists.",
-                    missing => $"No such {missing.Reference}.",
-                    conflict => $"A board named \"{conflict.Name}\" already exists.",
-                    invalid => InvalidNameMessage(invalid)),
-                "Saved.");
-        }
-        else
-        {
-            var created = await Catalog.CreateBoardAsync(SaveInput.Name ?? string.Empty, chipId, required);
-            Report(
-                created.Match<string?>(
-                    _ => null,
-                    missing => $"No such {missing.Reference}.",
-                    conflict => $"A board named \"{conflict.Name}\" already exists.",
-                    invalid => InvalidNameMessage(invalid)),
-                $"Created {SaveInput.Name}.");
+            var catalog = scope.Get<CatalogAdminService>();
+
+            if (_editingBoardId is { } boardId)
+            {
+                var updated = await catalog.UpdateBoardAsync(boardId, _name, chipId, required);
+                Report(
+                    updated.Match<string?>(
+                        _ => null,
+                        _ => "That board no longer exists.",
+                        missing => $"No such {missing.Reference}.",
+                        conflict => $"A board named \"{conflict.Name}\" already exists.",
+                        InvalidNameMessage),
+                    "Saved.");
+            }
+            else
+            {
+                var created = await catalog.CreateBoardAsync(_name, chipId, required);
+                Report(
+                    created.Match<string?>(
+                        _ => null,
+                        missing => $"No such {missing.Reference}.",
+                        conflict => $"A board named \"{conflict.Name}\" already exists.",
+                        InvalidNameMessage),
+                    $"Created {_name}.");
+            }
         }
 
-        SaveInput = new BoardInput();
+        _formOpen = false;
+        ResetForm();
         await LoadAsync();
     }
 
@@ -228,76 +312,74 @@
         $"\"{invalid.Name}\" is not a usable board name. Use letters, digits, '.', '_' or '-', " +
         "starting with a letter or digit.";
 
-    private async Task SetDiscontinuedAsync(Guid boardId, bool discontinued)
+    private async Task SetDiscontinuedAsync(FirmwareBoard board)
     {
-        var result = await Catalog.SetBoardDiscontinuedAsync(boardId, discontinued);
+        var discontinued = !board.Discontinued;
 
-        Report(
-            result.Match<string?>(
-                _ => null,
-                _ => "That board no longer exists."),
-            discontinued ? "Discontinued. Existing hubs keep updating." : "Reinstated.");
-
-        await LoadAsync();
-    }
-
-    private async Task DeleteAsync(Guid boardId)
-    {
-        var result = await Catalog.DeleteBoardAsync(boardId);
-
-        Report(
-            result.Match<string?>(
-                _ => null,
-                _ => "That board no longer exists.",
-                inUse => $"Cannot delete: still referenced by {inUse.ReferencedBy}."),
-            "Deleted.");
-
-        await LoadAsync();
-    }
-
-    private async Task AttachAsync()
-    {
-        if (AttachInput!.BoardId is not { } boardId || AttachInput.UsbDeviceId is not { } deviceId) return;
-
-        if (AttachInput.Detach)
+        await using (var scope = CreateScope())
         {
-            await Catalog.DetachUsbDeviceFromBoardAsync(boardId, deviceId);
-            Report(null, "Detached.");
-        }
-        else
-        {
-            var result = await Catalog.AttachUsbDeviceToBoardAsync(boardId, deviceId);
+            var result = await scope.Get<CatalogAdminService>()
+                .SetBoardDiscontinuedAsync(board.Id, discontinued);
+
             Report(
                 result.Match<string?>(
                     _ => null,
-                    missing => $"No such {missing.Reference}."),
-                "Attached.");
+                    _ => "That board no longer exists."),
+                discontinued ? "Discontinued. Existing hubs keep updating." : "Reinstated.");
         }
 
-        AttachInput = new AttachInputModel();
         await LoadAsync();
     }
 
-    private void Report(string? error, string success)
+    private async Task DeleteAsync(FirmwareBoard board)
     {
-        _error = error;
-        _message = error is null ? success : null;
+        if (!await ConfirmAsync("Delete board", $"Delete {board.Name}?")) return;
+
+        await using (var scope = CreateScope())
+        {
+            var result = await scope.Get<CatalogAdminService>().DeleteBoardAsync(board.Id);
+
+            Report(
+                result.Match<string?>(
+                    _ => null,
+                    _ => "That board no longer exists.",
+                    inUse => $"Cannot delete: still referenced by {inUse.ReferencedBy}."),
+                "Deleted.");
+        }
+
+        if (_editingBoardId == board.Id) ResetForm();
+        await LoadAsync();
     }
 
-    private sealed class BoardInput
+    private async Task ApplyAttachmentAsync(bool detach)
     {
-        public Guid? BoardId { get; set; }
-        public string? Name { get; set; }
-        public Guid? ChipId { get; set; }
-        public List<FirmwareArtifactType>? RequiredArtifactTypes { get; set; }
-    }
+        if (_attachBoardId is not { } boardId || _attachDeviceId is not { } deviceId)
+        {
+            ReportError("Pick a device.");
+            return;
+        }
 
-    private sealed class AttachInputModel
-    {
-        public Guid? BoardId { get; set; }
-        public Guid? UsbDeviceId { get; set; }
-        public bool Detach { get; set; }
-    }
+        await using (var scope = CreateScope())
+        {
+            var catalog = scope.Get<CatalogAdminService>();
 
-    private sealed class EmptyInput;
+            if (detach)
+            {
+                await catalog.DetachUsbDeviceFromBoardAsync(boardId, deviceId);
+                Report(null, "Detached.");
+            }
+            else
+            {
+                var result = await catalog.AttachUsbDeviceToBoardAsync(boardId, deviceId);
+                Report(
+                    result.Match<string?>(
+                        _ => null,
+                        missing => $"No such {missing.Reference}."),
+                    "Attached.");
+            }
+        }
+
+        _attachDeviceId = null;
+        await LoadAsync();
+    }
 }

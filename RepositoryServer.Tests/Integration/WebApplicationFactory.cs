@@ -45,18 +45,18 @@ public sealed class WebApplicationFactory
 
     /// <summary>
     /// Returns an <see cref="HttpClient"/> carrying an admin session, as if the caller had completed
-    /// an Authentik login. Pass <paramref name="group"/> to model an account that is signed in but
-    /// outside the admin group.
+    /// a GitHub login. Pass <paramref name="team"/> to model an account that is signed in but outside
+    /// the admin team.
     /// </summary>
-    public HttpClient CreateAdminClient(string username = "test-admin", string? group = null)
+    public HttpClient CreateAdminClient(string username = "test-admin", string? team = null)
     {
         var client = CreateClient();
         client.DefaultRequestHeaders.TryAddWithoutValidation(
             TestAdminAuthHandler.UserHeader, username);
-        if (group is not null)
+        if (team is not null)
         {
             client.DefaultRequestHeaders.TryAddWithoutValidation(
-                TestAdminAuthHandler.GroupHeader, group);
+                TestAdminAuthHandler.TeamHeader, team);
         }
         return client;
     }
@@ -181,10 +181,10 @@ public sealed class WebApplicationFactory
 
             // Admin auth is swapped for a test handler below, so these only have to satisfy config
             // validation. Nothing here is ever contacted: a login is never performed in-process.
-            ["Authentik:Authority"] = "https://authentik.invalid/application/o/repository-server/",
-            ["Authentik:ClientId"] = "repository-server-tests",
-            ["Authentik:ClientSecret"] = "test-client-secret",
-            ["Authentik:AdminGroup"] = TestAdminAuthHandler.AdminGroup,
+            ["GitHub:ClientId"] = "repository-server-tests",
+            ["GitHub:ClientSecret"] = "test-client-secret",
+            ["GitHub:Organization"] = "OpenShockTests",
+            ["GitHub:Team"] = TestAdminAuthHandler.AdminTeam,
 
             ["CiCd:Audience"] = "openshock-repository-server-test",
 

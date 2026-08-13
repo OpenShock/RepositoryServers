@@ -4,3 +4,5 @@ obj/
 bin/
 *.user
 .claude/settings.local.json
+# Test run artifacts
+TestResults/

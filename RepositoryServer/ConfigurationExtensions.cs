@@ -10,11 +10,16 @@ public static class ConfigurationExtensions
         // GetDebugView() prints every configuration value AND the process environment, which includes
         // the admin token, the database password, storage credentials and Discord webhook URLs. Only
         // the resolved keys are printed, which is what is actually useful for diagnosing binding.
-        Console.WriteLine("Configuration keys:");
-        foreach (var (key, value) in builder.Configuration.AsEnumerable().OrderBy(kv => kv.Key))
+        // Opt-in: this enumerates the entire configuration, environment variables included, which is
+        // hundreds of lines on a developer machine and drowns everything else in the startup log.
+        if (builder.Configuration.GetValue<bool>("DumpConfiguration"))
         {
-            if (value is null) continue;
-            Console.WriteLine($"  {key} = {RedactIfSensitive(key, value)}");
+            Console.WriteLine("Configuration keys:");
+            foreach (var (key, value) in builder.Configuration.AsEnumerable().OrderBy(kv => kv.Key))
+            {
+                if (value is null) continue;
+                Console.WriteLine($"  {key} = {RedactIfSensitive(key, value)}");
+            }
         }
 #endif
 

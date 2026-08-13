@@ -1,7 +1,7 @@
 namespace OpenShock.RepositoryServer.Config;
 
 /// <summary>
-/// Local development escape hatch that skips the Authentik login and treats every request as an
+/// Local development escape hatch that skips the GitHub login and treats every request as an
 /// administrator.
 /// </summary>
 /// <remarks>
@@ -16,7 +16,7 @@ public sealed class DevAuthConfig
     /// <summary>
     /// Grants admin to every caller. Ignored outside a Development-environment Debug build.
     /// </summary>
-    public bool BypassAuthentik { get; init; }
+    public bool BypassLogin { get; init; }
 
     /// <summary>Name the bypassed session reports, so logs and the UI show something meaningful.</summary>
     public string Username { get; init; } = "dev-admin";

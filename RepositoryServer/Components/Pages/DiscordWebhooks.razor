@@ -1,183 +1,231 @@
 @page "/admin/discord-webhooks"
 @attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
-@inject DiscordWebhookAdminService Webhooks
+@inherits AdminPageBase
 
-<h2>Discord webhooks</h2>
+<PageHeader Title="Discord webhooks">
+    <Subtitle>
+        Notification targets, shared by firmware and desktop module publishing. Subscribing per event lets
+        maintainer alerts go somewhere other than a public releases channel.
+    </Subtitle>
+    <Actions>
+        <BbButton OnClick="OpenCreate">Add webhook</BbButton>
+    </Actions>
+</PageHeader>
 
-<p class="muted">
-    Notification targets, shared by firmware and desktop module publishing. Subscribing per event lets
-    maintainer alerts go somewhere other than a public releases channel.
-</p>
+<BbCard Class="w-full overflow-hidden p-0">
+        <BbDataGrid TData="DiscordWebhook" Items="_webhooks" IsLoading="_loading" Striped="true"
+                    StickyHeader="true">
+            <EmptyTemplate>
+                <BbAlert Variant="AlertVariant.Info" Class="m-2">No webhooks. Nothing is notified.</BbAlert>
+            </EmptyTemplate>
+            <Columns>
+                <BbDataGridPropertyColumn TData="DiscordWebhook" TProp="string" Property="w => w.Name"
+                                          Title="Name"/>
+                @* Masked: the URL is a credential, and anyone who can read it can post to the channel. *@
+                <BbDataGridTemplateColumn TData="DiscordWebhook" Title="URL" Sortable="false">
+                    <code class="text-muted-foreground">@DiscordWebhookMasking.Mask(context.Url)</code>
+                </BbDataGridTemplateColumn>
+                <BbDataGridTemplateColumn TData="DiscordWebhook" Title="Events" Sortable="false">
+                    @if (context.Events.Length == 0)
+                    {
+                        <span class="text-sm text-muted-foreground">none</span>
+                    }
+                    else
+                    {
+                        <div class="flex flex-wrap gap-1">
+                            @foreach (var notificationEvent in context.Events)
+                            {
+                                <BbBadge Variant="BadgeVariant.Outline">@notificationEvent.ToEventName()</BbBadge>
+                            }
+                        </div>
+                    }
+                </BbDataGridTemplateColumn>
+                <BbDataGridPropertyColumn TData="DiscordWebhook" TProp="bool" Property="w => w.Enabled"
+                                          Title="Enabled">
+                    <CellTemplate>
+                        <BbBadge Variant="@(context.Enabled ? BadgeVariant.Default : BadgeVariant.Secondary)">
+                            @(context.Enabled ? "yes" : "no")
+                        </BbBadge>
+                    </CellTemplate>
+                </BbDataGridPropertyColumn>
+                <BbDataGridTemplateColumn TData="DiscordWebhook" Title="" Sortable="false" Width="0">
+                    <div class="flex justify-end gap-1">
+                        <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall" OnClick="() => OpenEdit(context)" AriaLabel="Edit" title="Edit">
+                        <Glyph Name="IconName.Pencil"/>
+                    </BbButton>
+                        <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall" Class="text-destructive" OnClick="() => DeleteAsync(context)" AriaLabel="Delete" title="Delete">
+                        <Glyph Name="IconName.Trash"/>
+                    </BbButton>
+                    </div>
+                </BbDataGridTemplateColumn>
+            </Columns>
+    </BbDataGrid>
+</BbCard>
 
-<StatusAlert Error="@_error" Message="@_message"/>
+<BbDialog @bind-Open="_formOpen">
+    <BbDialogContent Class="sm:max-w-md">
+        <BbDialogHeader>
+            <BbDialogTitle>@(_editingId is null ? "Add a webhook" : $"Edit {_name}")</BbDialogTitle>
+            <BbDialogDescription>
+                Subscribing per event lets maintainer alerts go somewhere other than a public
+                releases channel.
+            </BbDialogDescription>
+        </BbDialogHeader>
 
-<table>
-    <thead>
-    <tr>
-        <th>Name</th>
-        <th>URL</th>
-        <th>Events</th>
-        <th>Enabled</th>
-        <th></th>
-    </tr>
-    </thead>
-    <tbody>
-    @foreach (var webhook in _webhooks)
-    {
-        <tr>
-            <td>@webhook.Name</td>
-            @* Masked: the URL is a credential, and anyone who can read it can post to the channel. *@
-            <td class="muted"><code>@DiscordWebhookMasking.Mask(webhook.Url)</code></td>
-            <td class="muted">@FormatEvents(webhook.Events)</td>
-            <td>@(webhook.Enabled ? "yes" : "no")</td>
-            <td>
-                <EditForm FormName="@($"delete-webhook-{webhook.Id}")" Model="_actionModel"
-                          OnValidSubmit="() => DeleteAsync(webhook.Id)">
-                    <AntiforgeryToken/>
-                    <button type="submit" class="danger">Delete</button>
-                </EditForm>
-            </td>
-        </tr>
-    }
-    @if (_webhooks.Length == 0)
-    {
-        <tr>
-            <td colspan="5" class="empty">No webhooks. Nothing is notified.</td>
-        </tr>
-    }
-    </tbody>
-</table>
+        <div class="flex flex-col gap-4 py-2">
+            <div class="flex flex-col gap-2">
+                <BbLabel For="name">Name</BbLabel>
+                <BbInput Id="name" @bind-Value="_name" Placeholder="releases channel"/>
+            </div>
+            <div class="flex flex-col gap-2">
+                <BbLabel For="url">URL</BbLabel>
+                <BbInput Id="url" @bind-Value="_url" Type="InputType.Password"
+                         Placeholder="https://discord.com/api/webhooks/..."/>
+                @if (_editingId is not null)
+                {
+                    <p class="text-muted-foreground text-xs">Leave empty to keep the stored one.</p>
+                }
+            </div>
+            <div class="flex flex-col gap-2">
+                <BbLabel>Events</BbLabel>
+                @foreach (var notificationEvent in Events)
+                {
+                    var current = notificationEvent;
+                    <div class="flex items-center gap-2">
+                        <BbCheckbox Id="@($"event-{current}")" Checked="_events.Contains(current)"
+                                    CheckedChanged="@(checkedNow => ToggleEvent(current, checkedNow))"/>
+                        <BbLabel For="@($"event-{current}")">@current.ToEventName()</BbLabel>
+                    </div>
+                }
+            </div>
+            <div class="flex items-center gap-2">
+                <BbSwitch Id="enabled" @bind-Checked="_enabled"/>
+                <BbLabel For="enabled">Enabled</BbLabel>
+            </div>
+        </div>
 
-<h3>Add or edit</h3>
-
-<EditForm FormName="save-webhook" Model="SaveInput!" OnValidSubmit="SaveAsync" class="stack">
-    <AntiforgeryToken/>
-    <label>
-        Webhook
-        <InputSelect @bind-Value="SaveInput!.WebhookId">
-            <option value="">new webhook</option>
-            @foreach (var webhook in _webhooks)
-            {
-                <option value="@webhook.Id">@webhook.Name</option>
-            }
-        </InputSelect>
-    </label>
-    <label>
-        Name
-        <InputText @bind-Value="SaveInput!.Name" placeholder="releases channel"/>
-    </label>
-    <label>
-        URL <span class="muted">(leave empty when editing to keep the stored one)</span>
-        <InputText @bind-Value="SaveInput!.Url" type="password"
-                   placeholder="https://discord.com/api/webhooks/..."/>
-    </label>
-    <fieldset>
-        <legend>Events</legend>
-        @foreach (var notificationEvent in Events)
-        {
-            <label class="inline">
-                <input type="checkbox" name="SaveInput.Events" value="@notificationEvent"
-                       checked="@(SaveInput!.Events?.Contains(notificationEvent) == true)"/>
-                @notificationEvent.ToEventName()
-            </label>
-        }
-    </fieldset>
-    <label class="inline">
-        <InputCheckbox @bind-Value="SaveInput!.Enabled"/>
-        enabled
-    </label>
-    <button type="submit">Save</button>
-</EditForm>
+        <BbDialogFooter>
+            <BbButton Variant="ButtonVariant.Outline" OnClick="() => _formOpen = false">Cancel</BbButton>
+            <BbButton OnClick="SaveAsync">Save</BbButton>
+        </BbDialogFooter>
+    </BbDialogContent>
+</BbDialog>
 
 @code {
     private static readonly DiscordNotificationEvent[] Events = Enum.GetValues<DiscordNotificationEvent>();
 
     private DiscordWebhook[] _webhooks = [];
-    private string? _error;
-    private string? _message;
+    private bool _loading = true;
 
-    // No initializer: the binder assigns this on every post and would overwrite one with null (BL0008).
-    [SupplyParameterFromForm(FormName = "save-webhook")]
-    private WebhookInput? SaveInput { get; set; }
+    private bool _formOpen;
+    private Guid? _editingId;
+    private string _name = string.Empty;
+    private string? _url;
+    private readonly HashSet<DiscordNotificationEvent> _events = [];
+    private bool _enabled = true;
 
-    /// <summary>Satisfies EditForm on the delete buttons, which carry an id and no fields.</summary>
-    private readonly EmptyInput _actionModel = new();
+    protected override Task OnInitializedAsync() => LoadAsync();
 
-    protected override async Task OnInitializedAsync()
+    private async Task LoadAsync()
     {
-        SaveInput ??= new WebhookInput();
-        await LoadAsync();
+        _loading = true;
+        await using var scope = CreateScope();
+        _webhooks = await scope.Get<DiscordWebhookAdminService>().ListAsync();
+        _loading = false;
     }
 
-    private async Task LoadAsync() => _webhooks = await Webhooks.ListAsync();
+    private void ToggleEvent(DiscordNotificationEvent notificationEvent, bool selected)
+    {
+        if (selected) _events.Add(notificationEvent);
+        else _events.Remove(notificationEvent);
+    }
 
-    private static string FormatEvents(DiscordNotificationEvent[] events) =>
-        events.Length == 0 ? "none" : string.Join(", ", events.Select(e => e.ToEventName()));
+    private void OpenCreate()
+    {
+        ResetForm();
+        _formOpen = true;
+    }
+
+    private void OpenEdit(DiscordWebhook webhook)
+    {
+        _formOpen = true;
+        _editingId = webhook.Id;
+        _name = webhook.Name;
+        // Never populated from the stored value: it is a credential and the UI only ever shows it masked.
+        _url = null;
+        _events.Clear();
+        foreach (var notificationEvent in webhook.Events) _events.Add(notificationEvent);
+        _enabled = webhook.Enabled;
+    }
+
+    private void ResetForm()
+    {
+        _editingId = null;
+        _name = string.Empty;
+        _url = null;
+        _events.Clear();
+        _enabled = true;
+    }
 
     private async Task SaveAsync()
     {
-        if (string.IsNullOrWhiteSpace(SaveInput!.Name))
+        if (string.IsNullOrWhiteSpace(_name))
         {
-            Report("Name is required.", string.Empty);
+            ReportError("Name is required.");
             return;
         }
 
-        var events = SaveInput.Events?.ToArray() ?? [];
-        var url = string.IsNullOrWhiteSpace(SaveInput.Url) ? null : SaveInput.Url.Trim();
+        var url = string.IsNullOrWhiteSpace(_url) ? null : _url.Trim();
+        var events = _events.ToArray();
 
-        if (SaveInput.WebhookId is { } webhookId)
+        if (_editingId is null && url is null)
         {
-            var result = await Webhooks.UpdateAsync(webhookId, SaveInput.Name, url, events, SaveInput.Enabled);
+            ReportError("A URL is required for a new webhook.");
+            return;
+        }
+
+        await using (var scope = CreateScope())
+        {
+            var webhooks = scope.Get<DiscordWebhookAdminService>();
+
+            if (_editingId is { } webhookId)
+            {
+                var result = await webhooks.UpdateAsync(webhookId, _name, url, events, _enabled);
+
+                Report(
+                    result.Match<string?>(
+                        _ => null,
+                        _ => "That webhook no longer exists."),
+                    "Saved.");
+            }
+            else
+            {
+                await webhooks.CreateAsync(_name, url!, events, _enabled);
+                Report(null, "Created.");
+            }
+        }
+
+        _formOpen = false;
+        ResetForm();
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(DiscordWebhook webhook)
+    {
+        if (!await ConfirmAsync("Delete webhook", $"Delete \"{webhook.Name}\"?")) return;
+
+        await using (var scope = CreateScope())
+        {
+            var result = await scope.Get<DiscordWebhookAdminService>().DeleteAsync(webhook.Id);
 
             Report(
                 result.Match<string?>(
                     _ => null,
                     _ => "That webhook no longer exists."),
-                "Saved.");
-        }
-        else
-        {
-            if (url is null)
-            {
-                Report("A URL is required for a new webhook.", string.Empty);
-                return;
-            }
-
-            await Webhooks.CreateAsync(SaveInput.Name, url, events, SaveInput.Enabled);
-            Report(null, "Created.");
+                "Deleted.");
         }
 
-        SaveInput = new WebhookInput();
+        if (_editingId == webhook.Id) ResetForm();
         await LoadAsync();
     }
-
-    private async Task DeleteAsync(Guid webhookId)
-    {
-        var result = await Webhooks.DeleteAsync(webhookId);
-
-        Report(
-            result.Match<string?>(
-                _ => null,
-                _ => "That webhook no longer exists."),
-            "Deleted.");
-
-        await LoadAsync();
-    }
-
-    private void Report(string? error, string success)
-    {
-        _error = error;
-        _message = error is null ? success : null;
-    }
-
-    private sealed class WebhookInput
-    {
-        public Guid? WebhookId { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public string? Url { get; set; }
-        public List<DiscordNotificationEvent>? Events { get; set; }
-        public bool Enabled { get; set; } = true;
-    }
-
-    private sealed class EmptyInput;
 }

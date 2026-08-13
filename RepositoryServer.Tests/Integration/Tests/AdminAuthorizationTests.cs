@@ -26,8 +26,8 @@ public class AdminAuthorizationTests
     /// </summary>
     /// <remarks>
     /// In production the cookie handler turns this into a redirect to <c>/auth/login</c>. The harness
-    /// replaces that scheme with a stub, so what is asserted here is the refusal itself rather than the
-    /// shape of the challenge.
+    /// replaces that scheme with a stub, so what is asserted here is the refusal itself rather than
+    /// the shape of the challenge.
     /// </remarks>
     [Test]
     public async Task AdminPage_WithoutSession_IsRefusedAndRendersNothing()
@@ -41,19 +41,21 @@ public class AdminAuthorizationTests
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Unauthorized);
 
+        // Not one byte of the admin app: no page text, and no shell to boot it from either.
         var body = await response.Content.ReadAsStringAsync();
         await Assert.That(body).DoesNotContain("USB devices");
+        await Assert.That(body).DoesNotContain("blazor.web.js");
     }
 
     /// <summary>
-    /// Authenticating with Authentik is not the same as being an administrator. A session for an
-    /// account outside the configured group has to be refused, otherwise every user in the directory
-    /// would inherit admin rights the moment SSO was switched on.
+    /// Authenticating with GitHub is not the same as being an administrator. A session for an account
+    /// outside the configured team has to be refused, otherwise every GitHub user on earth would
+    /// inherit admin rights the moment the OAuth app was created.
     /// </summary>
     [Test]
-    public async Task AdminPage_SessionOutsideAdminGroup_IsRefused()
+    public async Task AdminPage_SessionOutsideAdminTeam_IsRefused()
     {
-        using var client = Factory.CreateAdminClient(group: "some-other-group");
+        using var client = Factory.CreateAdminClient(team: "some-other-team");
 
         var response = await client.GetAsync(AdminPath);
 
@@ -61,10 +63,21 @@ public class AdminAuthorizationTests
 
         var body = await response.Content.ReadAsStringAsync();
         await Assert.That(body).DoesNotContain("USB devices");
+        await Assert.That(body).DoesNotContain("blazor.web.js");
     }
 
+    /// <summary>
+    /// The other half of the gate: an admin session gets past it and is served the app.
+    /// </summary>
+    /// <remarks>
+    /// Asserts on the shell rather than on page text. The admin UI renders interactively with
+    /// prerendering off, so the response an admin receives is the document plus a component marker,
+    /// and the table itself arrives over the circuit afterwards. What this pins down is that the
+    /// policy admitted the request — the page content is not in any HTTP response to compare, for
+    /// either party.
+    /// </remarks>
     [Test]
-    public async Task AdminPage_WithAdminSession_Renders()
+    public async Task AdminPage_WithAdminSession_IsServedTheApp()
     {
         using var client = Factory.CreateAdminClient();
 
@@ -73,7 +86,8 @@ public class AdminAuthorizationTests
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
 
         var body = await response.Content.ReadAsStringAsync();
-        await Assert.That(body).Contains("USB devices");
+        await Assert.That(body).Contains("blazor.web.js");
+        await Assert.That(body).Contains("Blazor:");
     }
 
     [Test]
@@ -87,7 +101,7 @@ public class AdminAuthorizationTests
         var body = await response.Content.ReadFromJsonAsync<MeResponse>();
         await Assert.That(body).IsNotNull();
         await Assert.That(body!.Username).IsEqualTo("someone@openshock.example");
-        await Assert.That(body.Groups).Contains(TestAdminAuthHandler.AdminGroup);
+        await Assert.That(body.Team).IsEqualTo(TestAdminAuthHandler.AdminTeam);
     }
 
     [Test]
@@ -117,5 +131,5 @@ public class AdminAuthorizationTests
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
     }
 
-    private sealed record MeResponse(string? Subject, string? Username, string[] Groups);
+    private sealed record MeResponse(string? Subject, string? Username, string? Team);
 }

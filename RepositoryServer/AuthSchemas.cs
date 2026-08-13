@@ -3,16 +3,16 @@ namespace OpenShock.RepositoryServer;
 public static class AuthSchemas
 {
     /// <summary>
-    /// Session cookie issued after a successful Authentik login. This is what admin endpoints
-    /// actually authorize against; <see cref="AdminOidc"/> only establishes it.
+    /// Session cookie issued after a successful GitHub login. This is what admin endpoints
+    /// actually authorize against; <see cref="AdminOAuth"/> only establishes it.
     /// </summary>
     public const string AdminCookie = "AdminCookie";
 
     /// <summary>
-    /// The OpenID Connect challenge scheme pointing at Authentik. Only ever used to start a login,
-    /// never to authorize a request.
+    /// The OAuth challenge scheme pointing at GitHub. Only ever used to start a login, never to
+    /// authorize a request.
     /// </summary>
-    public const string AdminOidc = "AdminOidc";
+    public const string AdminOAuth = "AdminOAuth";
 
     public const string CiCdToken = "CiCdToken";
 
@@ -20,8 +20,8 @@ public static class AuthSchemas
     public static class Policies
     {
         /// <summary>
-        /// Guards every admin endpoint. Requires an Authentik session whose principal carries the
-        /// configured admin group.
+        /// Guards every admin endpoint. Requires a GitHub session whose principal carries the
+        /// configured admin team.
         /// </summary>
         public const string Admin = "Admin";
 
@@ -30,20 +30,23 @@ public static class AuthSchemas
     }
 
     /// <summary>
-    /// Claim keys attached to the admin principal after a successful Authentik login.
+    /// Claim keys attached to the admin principal after a successful GitHub login.
     /// </summary>
     public static class AdminClaims
     {
         /// <summary>
-        /// Group membership as reported by Authentik. The provider must be configured to emit
-        /// <c>groups</c>; without it every login is rejected, since nothing can satisfy the policy.
+        /// Slug of the GitHub team the login was accepted for. Written by us at the callback rather
+        /// than read off GitHub, so it is present exactly when membership was verified.
         /// </summary>
-        public const string Group = "groups";
+        public const string Team = "openshock:team";
 
-        /// <summary>Stable subject identifier, used for audit logging rather than authorization.</summary>
+        /// <summary>
+        /// GitHub's numeric user id. Used for audit logging rather than authorization, and preferred
+        /// over the login because ids are stable across renames.
+        /// </summary>
         public const string Subject = "sub";
 
-        /// <summary>Human-readable identity for logs. Never authorize on this: usernames are mutable.</summary>
+        /// <summary>GitHub login, for logs and the UI. Never authorize on this: logins are mutable.</summary>
         public const string Username = "preferred_username";
     }
 

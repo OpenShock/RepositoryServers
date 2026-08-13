@@ -1,115 +1,135 @@
 @page "/admin/firmware/chips"
 @attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
-@inject CatalogAdminService Catalog
+@inherits AdminPageBase
 
-<h2>Chips</h2>
+<PageHeader Title="Chips">
+    <Subtitle>
+        Names must match esptool-js chip identifiers exactly, since the web flashtool passes them straight
+        through to the flasher.
+    </Subtitle>
+    <Actions>
+        <BbButton OnClick="OpenCreate">Add chip</BbButton>
+    </Actions>
+</PageHeader>
 
-<p class="muted">
-    Names must match esptool-js chip identifiers exactly, since the web flashtool passes them straight
-    through to the flasher.
-</p>
+@*
+    The table owns the page and the forms live in dialogs, rather than a permanent side panel. A side
+    panel costs half the width on every visit for something used occasionally, and it needs its own
+    "which record am I editing?" affordance, which a dialog title answers by itself.
+*@
+<BbCard Class="w-full overflow-hidden p-0">
+    <BbDataGrid TData="FirmwareChip" Items="_chips" IsLoading="_loading" Striped="true"
+                StickyHeader="true">
+        <EmptyTemplate>
+            <div class="flex flex-col items-center gap-3 py-12 text-center">
+                <p class="text-muted-foreground">No chips yet.</p>
+                <BbButton Variant="ButtonVariant.Outline" OnClick="OpenCreate">Add the first chip</BbButton>
+            </div>
+        </EmptyTemplate>
+        <Columns>
+            <BbDataGridPropertyColumn TData="FirmwareChip" TProp="string" Property="c => c.Name" Title="Name"/>
+            <BbDataGridTemplateColumn TData="FirmwareChip" Title="Architecture">
+                @(context.Architecture?.ToString().ToLowerInvariant() ?? "unspecified")
+            </BbDataGridTemplateColumn>
+            <BbDataGridTemplateColumn TData="FirmwareChip" Title="USB devices" Sortable="false">
+                <span class="text-muted-foreground">@AttachedDeviceNames(context.Id)</span>
+            </BbDataGridTemplateColumn>
+            @* Action column collapses to its content, per style guide §3.4. *@
+            <BbDataGridTemplateColumn TData="FirmwareChip" Title="" Sortable="false" Width="0">
+                <div class="flex justify-end gap-1">
+                    <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall" OnClick="() => OpenEdit(context)" AriaLabel="Edit" title="Edit">
+                        <Glyph Name="IconName.Pencil"/>
+                    </BbButton>
+                    <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall" OnClick="() => OpenAttach(context)" AriaLabel="USB devices" title="USB devices">
+                        <Glyph Name="IconName.Usb"/>
+                    </BbButton>
+                    <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall" Class="text-destructive" OnClick="() => DeleteAsync(context)" AriaLabel="Delete" title="Delete">
+                        <Glyph Name="IconName.Trash"/>
+                    </BbButton>
+                </div>
+            </BbDataGridTemplateColumn>
+        </Columns>
+    </BbDataGrid>
+</BbCard>
 
-@* Both are string parameters, so they need the @ prefix; without it Razor passes the literal text. *@
-<StatusAlert Error="@_error" Message="@_message"/>
+<BbDialog @bind-Open="_formOpen">
+    <BbDialogContent Class="sm:max-w-md">
+        <BbDialogHeader>
+            <BbDialogTitle>@(_editingChipId is null ? "Add a chip" : $"Edit {_name}")</BbDialogTitle>
+            <BbDialogDescription>
+                The name is passed straight to esptool-js, so it has to match its identifier exactly.
+            </BbDialogDescription>
+        </BbDialogHeader>
 
-<table>
-    <thead>
-    <tr>
-        <th>Name</th>
-        <th>Architecture</th>
-        <th>USB devices</th>
-        <th></th>
-    </tr>
-    </thead>
-    <tbody>
-    @foreach (var chip in _chips)
-    {
-        <tr>
-            <td>
-                <EditForm FormName="@($"edit-chip-{chip.Id}")" Model="EditInput!"
-                          OnValidSubmit="() => UpdateAsync(chip.Id)" class="row-form">
-                    <AntiforgeryToken/>
-                    <InputText @bind-Value="EditInput!.Name" placeholder="@chip.Name" size="24"/>
-                    <InputSelect @bind-Value="EditInput!.Architecture">
-                        <option value="">unspecified</option>
+        <div class="flex flex-col gap-4 py-2">
+            <div class="flex flex-col gap-2">
+                <BbLabel For="chip-name">Name</BbLabel>
+                <BbInput Id="chip-name" @bind-Value="_name" Placeholder="ESP32-S3"/>
+            </div>
+            <div class="flex flex-col gap-2">
+                <BbLabel>Architecture</BbLabel>
+                <BbSelect TValue="FirmwareChipArchitecture?" @bind-Value="_architecture">
+                    <BbSelectTrigger TValue="FirmwareChipArchitecture?">
+                        <BbSelectValue Placeholder="unspecified"/>
+                    </BbSelectTrigger>
+                    <BbSelectContent TValue="FirmwareChipArchitecture?">
                         @foreach (var architecture in Architectures)
                         {
-                            <option value="@architecture">@architecture.ToString().ToLowerInvariant()</option>
+                            <BbSelectItem TValue="FirmwareChipArchitecture?" Value="@architecture"
+                                          Text="@architecture.ToString().ToLowerInvariant()"/>
                         }
-                    </InputSelect>
-                    <button type="submit">Save</button>
-                </EditForm>
-            </td>
-            <td>@(chip.Architecture?.ToString().ToLowerInvariant() ?? "unspecified")</td>
-            <td class="muted">@AttachedDeviceNames(chip.Id)</td>
-            <td>
-                <EditForm FormName="@($"delete-chip-{chip.Id}")" Model="_deleteModel"
-                          OnValidSubmit="() => DeleteAsync(chip.Id)">
-                    <AntiforgeryToken/>
-                    <button type="submit" class="danger">Delete</button>
-                </EditForm>
-            </td>
-        </tr>
-    }
-    @if (_chips.Length == 0)
-    {
-        <tr>
-            <td colspan="4" class="empty">No chips.</td>
-        </tr>
-    }
-    </tbody>
-</table>
+                    </BbSelectContent>
+                </BbSelect>
+            </div>
+        </div>
 
-<h3>Add a chip</h3>
+        <BbDialogFooter>
+            <BbButton Variant="ButtonVariant.Outline" OnClick="() => _formOpen = false">Cancel</BbButton>
+            <BbButton OnClick="SaveAsync">@(_editingChipId is null ? "Create" : "Save")</BbButton>
+        </BbDialogFooter>
+    </BbDialogContent>
+</BbDialog>
 
-<EditForm FormName="create-chip" Model="CreateInput!" OnValidSubmit="CreateAsync" class="stack">
-    <AntiforgeryToken/>
-    <label>
-        Name
-        <InputText @bind-Value="CreateInput!.Name" placeholder="ESP32-S3"/>
-    </label>
-    <label>
-        Architecture
-        <InputSelect @bind-Value="CreateInput!.Architecture">
-            <option value="">unspecified</option>
-            @foreach (var architecture in Architectures)
-            {
-                <option value="@architecture">@architecture.ToString().ToLowerInvariant()</option>
-            }
-        </InputSelect>
-    </label>
-    <button type="submit">Create</button>
-</EditForm>
+<BbDialog @bind-Open="_attachOpen">
+    <BbDialogContent Class="sm:max-w-md">
+        <BbDialogHeader>
+            <BbDialogTitle>USB devices for @_attachChipName</BbDialogTitle>
+            <BbDialogDescription>
+                Native USB modes this chip exposes, used to recognise a board in the flashtool.
+            </BbDialogDescription>
+        </BbDialogHeader>
 
-<h3>USB devices</h3>
+        <div class="flex flex-col gap-4 py-2">
+            <div class="flex flex-col gap-2">
+                <BbLabel>Currently attached</BbLabel>
+                <p class="text-muted-foreground text-sm">
+                    @(_attachChipId is { } id ? AttachedDeviceNames(id) : "none")
+                </p>
+            </div>
+            <div class="flex flex-col gap-2">
+                <BbLabel>Device</BbLabel>
+                <BbSelect TValue="Guid?" @bind-Value="_attachDeviceId">
+                    <BbSelectTrigger TValue="Guid?">
+                        <BbSelectValue Placeholder="select a device"/>
+                    </BbSelectTrigger>
+                    <BbSelectContent TValue="Guid?">
+                        @foreach (var device in _usbDevices)
+                        {
+                            <BbSelectItem TValue="Guid?" Value="@device.Id"
+                                          Text="@($"{device.Name} ({Hex(device.Vid)}:{Hex(device.Pid)})")"/>
+                        }
+                    </BbSelectContent>
+                </BbSelect>
+            </div>
+        </div>
 
-<p class="muted">Native USB modes a chip exposes, used to recognise a board in the flashtool.</p>
-
-<EditForm FormName="attach-chip-usb" Model="AttachInput!" OnValidSubmit="AttachAsync" class="stack">
-    <AntiforgeryToken/>
-    <label>
-        Chip
-        <InputSelect @bind-Value="AttachInput!.ChipId">
-            <option value="">select</option>
-            @foreach (var chip in _chips)
-            {
-                <option value="@chip.Id">@chip.Name</option>
-            }
-        </InputSelect>
-    </label>
-    <label>
-        Device
-        <InputSelect @bind-Value="AttachInput!.UsbDeviceId">
-            <option value="">select</option>
-            @foreach (var device in _usbDevices)
-            {
-                <option value="@device.Id">@device.Name (@FormatId(device.Vid):@FormatId(device.Pid))</option>
-            }
-        </InputSelect>
-    </label>
-    <button type="submit">Attach</button>
-    <button type="submit" formaction="" name="detach" value="true" @onclick="() => _detach = true">Detach</button>
-</EditForm>
+        <BbDialogFooter>
+            <BbButton Variant="ButtonVariant.Outline"
+                      OnClick="() => ApplyAttachmentAsync(detach: true)">Detach</BbButton>
+            <BbButton OnClick="() => ApplyAttachmentAsync(detach: false)">Attach</BbButton>
+        </BbDialogFooter>
+    </BbDialogContent>
+</BbDialog>
 
 @code {
     private static readonly FirmwareChipArchitecture[] Architectures = Enum.GetValues<FirmwareChipArchitecture>();
@@ -117,38 +137,35 @@
     private FirmwareChip[] _chips = [];
     private UsbDevice[] _usbDevices = [];
     private FirmwareChipUsbDevice[] _attachments = [];
-    private string? _error;
-    private string? _message;
-    private bool _detach;
+    private bool _loading = true;
 
-    // Form-bound properties must not have initializers: the binder assigns them on every post, and an
-    // initializer would be overwritten with null when a post carries no value for them (BL0008).
-    [SupplyParameterFromForm(FormName = "create-chip")]
-    private ChipInput? CreateInput { get; set; }
+    private bool _formOpen;
+    private Guid? _editingChipId;
+    private string _name = string.Empty;
+    private FirmwareChipArchitecture? _architecture;
 
-    [SupplyParameterFromForm(FormName = "edit-chip")]
-    private ChipInput? EditInput { get; set; }
+    private bool _attachOpen;
+    private Guid? _attachChipId;
+    private string _attachChipName = string.Empty;
+    private Guid? _attachDeviceId;
 
-    [SupplyParameterFromForm(FormName = "attach-chip-usb")]
-    private AttachInputModel? AttachInput { get; set; }
-
-    /// <summary>Satisfies EditForm on the delete buttons, which submit an id in their name and no fields.</summary>
-    private readonly EmptyInput _deleteModel = new();
-
-    protected override async Task OnInitializedAsync()
-    {
-        CreateInput ??= new ChipInput();
-        EditInput ??= new ChipInput();
-        AttachInput ??= new AttachInputModel();
-        await LoadAsync();
-    }
+    protected override Task OnInitializedAsync() => LoadAsync();
 
     private async Task LoadAsync()
     {
-        _chips = await Catalog.ListChipsAsync();
-        _usbDevices = await Catalog.ListUsbDevicesAsync();
-        _attachments = await Catalog.ListChipUsbDevicesAsync();
+        _loading = true;
+
+        await using var scope = CreateScope();
+        var catalog = scope.Get<CatalogAdminService>();
+
+        _chips = await catalog.ListChipsAsync();
+        _usbDevices = await catalog.ListUsbDevicesAsync();
+        _attachments = await catalog.ListChipUsbDevicesAsync();
+
+        _loading = false;
     }
+
+    private static string Hex(int value) => $"0x{value:X4}";
 
     private string AttachedDeviceNames(Guid chipId)
     {
@@ -161,97 +178,117 @@
         return names.Length == 0 ? "none" : string.Join(", ", names);
     }
 
-    private static string FormatId(int value) => $"0x{value:X4}";
-
-    private async Task CreateAsync()
+    private void OpenCreate()
     {
-        var result = await Catalog.CreateChipAsync(CreateInput!.Name, CreateInput.Architecture);
-
-        Report(
-            result.Match<string?>(
-                _ => null,
-                conflict => $"A chip named \"{conflict.Name}\" already exists."),
-            $"Created {CreateInput.Name}.");
-
-        CreateInput = new ChipInput();
-        await LoadAsync();
+        _editingChipId = null;
+        _name = string.Empty;
+        _architecture = null;
+        _formOpen = true;
     }
 
-    private async Task UpdateAsync(Guid chipId)
+    private void OpenEdit(FirmwareChip chip)
     {
-        var name = string.IsNullOrWhiteSpace(EditInput!.Name)
-            ? _chips.FirstOrDefault(c => c.Id == chipId)?.Name
-            : EditInput.Name;
-
-        if (name is null) return;
-
-        var result = await Catalog.UpdateChipAsync(chipId, name, EditInput.Architecture);
-
-        Report(
-            result.Match<string?>(
-                _ => null,
-                _ => "That chip no longer exists.",
-                conflict => $"A chip named \"{conflict.Name}\" already exists."),
-            "Saved.");
-
-        EditInput = new ChipInput();
-        await LoadAsync();
+        _editingChipId = chip.Id;
+        _name = chip.Name;
+        _architecture = chip.Architecture;
+        _formOpen = true;
     }
 
-    private async Task DeleteAsync(Guid chipId)
+    private void OpenAttach(FirmwareChip chip)
     {
-        var result = await Catalog.DeleteChipAsync(chipId);
-
-        Report(
-            result.Match<string?>(
-                _ => null,
-                _ => "That chip no longer exists.",
-                inUse => $"Cannot delete: still referenced by {inUse.ReferencedBy}."),
-            "Deleted.");
-
-        await LoadAsync();
+        _attachChipId = chip.Id;
+        _attachChipName = chip.Name;
+        _attachDeviceId = null;
+        _attachOpen = true;
     }
 
-    private async Task AttachAsync()
+    private async Task SaveAsync()
     {
-        if (AttachInput!.ChipId is not { } chipId || AttachInput.UsbDeviceId is not { } deviceId) return;
-
-        if (_detach)
+        if (string.IsNullOrWhiteSpace(_name))
         {
-            await Catalog.DetachUsbDeviceFromChipAsync(chipId, deviceId);
-            Report(null, "Detached.");
+            ReportError("Name is required.");
+            return;
         }
-        else
+
+        await using (var scope = CreateScope())
         {
-            var result = await Catalog.AttachUsbDeviceToChipAsync(chipId, deviceId);
+            var catalog = scope.Get<CatalogAdminService>();
+
+            if (_editingChipId is { } chipId)
+            {
+                var result = await catalog.UpdateChipAsync(chipId, _name.Trim(), _architecture);
+
+                Report(
+                    result.Match<string?>(
+                        _ => null,
+                        _ => "That chip no longer exists.",
+                        conflict => $"A chip named \"{conflict.Name}\" already exists."),
+                    "Saved.");
+            }
+            else
+            {
+                var result = await catalog.CreateChipAsync(_name.Trim(), _architecture);
+
+                Report(
+                    result.Match<string?>(
+                        _ => null,
+                        conflict => $"A chip named \"{conflict.Name}\" already exists."),
+                    $"Created {_name}.");
+            }
+        }
+
+        _formOpen = false;
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(FirmwareChip chip)
+    {
+        if (!await ConfirmAsync("Delete chip", $"Delete {chip.Name}?")) return;
+
+        await using (var scope = CreateScope())
+        {
+            var result = await scope.Get<CatalogAdminService>().DeleteChipAsync(chip.Id);
+
             Report(
                 result.Match<string?>(
                     _ => null,
-                    missing => $"No such {missing.Reference}."),
-                "Attached.");
+                    _ => "That chip no longer exists.",
+                    inUse => $"Cannot delete: still referenced by {inUse.ReferencedBy}."),
+                "Deleted.");
         }
 
-        _detach = false;
         await LoadAsync();
     }
 
-    private void Report(string? error, string success)
+    private async Task ApplyAttachmentAsync(bool detach)
     {
-        _error = error;
-        _message = error is null ? success : null;
-    }
+        if (_attachChipId is not { } chipId || _attachDeviceId is not { } deviceId)
+        {
+            ReportError("Pick a device.");
+            return;
+        }
 
-    private sealed class ChipInput
-    {
-        public string Name { get; set; } = string.Empty;
-        public FirmwareChipArchitecture? Architecture { get; set; }
-    }
+        await using (var scope = CreateScope())
+        {
+            var catalog = scope.Get<CatalogAdminService>();
 
-    private sealed class EmptyInput;
+            if (detach)
+            {
+                await catalog.DetachUsbDeviceFromChipAsync(chipId, deviceId);
+                Report(null, "Detached.");
+            }
+            else
+            {
+                var result = await catalog.AttachUsbDeviceToChipAsync(chipId, deviceId);
+                Report(
+                    result.Match<string?>(
+                        _ => null,
+                        missing => $"No such {missing.Reference}."),
+                    "Attached.");
+            }
+        }
 
-    private sealed class AttachInputModel
-    {
-        public Guid? ChipId { get; set; }
-        public Guid? UsbDeviceId { get; set; }
+        _attachDeviceId = null;
+        await LoadAsync();
     }
 }

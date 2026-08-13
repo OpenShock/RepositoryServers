@@ -926,7 +926,7 @@ A background job automatically aborts and cleans up staging releases that have b
 
 **There are no admin endpoints.** Administration is the management UI at `/admin`, served by the
 repository server itself and rendered on the server, so an unauthenticated visitor is turned away
-before any markup is produced. Access requires an Authentik session in the configured admin group; see
+before any markup is produced. Access requires a GitHub session in the configured admin team; see
 the README for the login flow.
 
 The UI covers:

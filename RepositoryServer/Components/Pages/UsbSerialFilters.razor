@@ -1,120 +1,176 @@
 @page "/admin/firmware/usb-serial-filters"
 @attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
-@inject CatalogAdminService Catalog
+@inherits AdminPageBase
 
-<h2>USB serial filters</h2>
+<PageHeader Title="USB serial filters">
+    <Subtitle>
+        WebSerial port picker rules. Leaving the PID empty matches an entire vendor, and there can only be
+        one vendor-wide row per VID.
+    </Subtitle>
+    <Actions>
+        <BbButton OnClick="OpenCreate">Add filter</BbButton>
+    </Actions>
+</PageHeader>
 
-<p class="muted">
-    WebSerial port picker rules. Leaving the PID empty matches an entire vendor, and there can only be
-    one vendor-wide row per VID.
-</p>
+<BbCard Class="w-full overflow-hidden p-0">
+        <BbDataGrid TData="UsbSerialFilter" Items="_filters" IsLoading="_loading" Striped="true"
+                    StickyHeader="true">
+            <EmptyTemplate>
+                <div class="flex flex-col items-center gap-3 py-12 text-center">
+                    <p class="text-muted-foreground">No filters yet.</p>
+                    <BbButton Variant="ButtonVariant.Outline" OnClick="OpenCreate">Add the first filter</BbButton>
+                </div>
+            </EmptyTemplate>
+            <Columns>
+                <BbDataGridPropertyColumn TData="UsbSerialFilter" TProp="int" Property="f => f.Vid" Title="VID">
+                    <CellTemplate>
+                        <code>@Hex(context.Vid)</code>
+                    </CellTemplate>
+                </BbDataGridPropertyColumn>
+                <BbDataGridTemplateColumn TData="UsbSerialFilter" Title="PID">
+                    @if (context.Pid is { } pid)
+                    {
+                        <code>@Hex(pid)</code>
+                    }
+                    else
+                    {
+                        <BbBadge Variant="BadgeVariant.Secondary">any</BbBadge>
+                    }
+                </BbDataGridTemplateColumn>
+                <BbDataGridPropertyColumn TData="UsbSerialFilter" TProp="string" Property="f => f.Description"
+                                          Title="Description"/>
+                <BbDataGridTemplateColumn TData="UsbSerialFilter" Title="" Sortable="false" Width="0">
+                    <div class="flex justify-end gap-1">
+                        <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall" OnClick="() => OpenEdit(context)" AriaLabel="Edit" title="Edit">
+                        <Glyph Name="IconName.Pencil"/>
+                    </BbButton>
+                        <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall" Class="text-destructive" OnClick="() => DeleteAsync(context)" AriaLabel="Delete" title="Delete">
+                        <Glyph Name="IconName.Trash"/>
+                    </BbButton>
+                    </div>
+                </BbDataGridTemplateColumn>
+            </Columns>
+    </BbDataGrid>
+</BbCard>
 
-<StatusAlert Error="@_error" Message="@_message"/>
+<BbDialog @bind-Open="_formOpen">
+    <BbDialogContent Class="sm:max-w-md">
+        <BbDialogHeader>
+            <BbDialogTitle>@(_editing ? "Edit filter" : "Add a filter")</BbDialogTitle>
+            <BbDialogDescription>
+                Leaving the PID empty matches an entire vendor, and there can only be one vendor-wide
+                row per VID.
+            </BbDialogDescription>
+        </BbDialogHeader>
 
-<table>
-    <thead>
-    <tr>
-        <th>VID</th>
-        <th>PID</th>
-        <th>Description</th>
-        <th></th>
-    </tr>
-    </thead>
-    <tbody>
-    @foreach (var filter in _filters)
-    {
-        <tr>
-            <td><code>@Hex(filter.Vid)</code></td>
-            <td>@(filter.Pid is { } pid ? Hex(pid) : "any")</td>
-            <td>@(filter.Description ?? "")</td>
-            <td>
-                <EditForm FormName="@($"delete-filter-{filter.Id}")" Model="_deleteModel"
-                          OnValidSubmit="() => DeleteAsync(filter.Id)">
-                    <AntiforgeryToken/>
-                    <button type="submit" class="danger">Delete</button>
-                </EditForm>
-            </td>
-        </tr>
-    }
-    @if (_filters.Length == 0)
-    {
-        <tr>
-            <td colspan="4" class="empty">No filters.</td>
-        </tr>
-    }
-    </tbody>
-</table>
+        <div class="flex flex-col gap-4 py-2">
+            <div class="flex flex-col gap-2">
+                <BbLabel For="vid">VID</BbLabel>
+                <BbInput Id="vid" @bind-Value="_vid" Placeholder="0x1A86"/>
+            </div>
+            <div class="flex flex-col gap-2">
+                <BbLabel For="pid">PID</BbLabel>
+                <BbInput Id="pid" @bind-Value="_pid" Placeholder="0x7522"/>
+                <p class="text-muted-foreground text-xs">Empty matches the whole vendor.</p>
+            </div>
+            <div class="flex flex-col gap-2">
+                <BbLabel For="description">Description</BbLabel>
+                <BbInput Id="description" @bind-Value="_description" Placeholder="QinHeng CH340"/>
+            </div>
+        </div>
 
-<h3>Add or update</h3>
-
-<EditForm FormName="upsert-filter" Model="UpsertInput!" OnValidSubmit="UpsertAsync" class="stack">
-    <AntiforgeryToken/>
-    <label>
-        VID
-        <InputText @bind-Value="UpsertInput!.Vid" placeholder="0x1A86"/>
-    </label>
-    <label>
-        PID <span class="muted">(empty matches the whole vendor)</span>
-        <InputText @bind-Value="UpsertInput!.Pid" placeholder="0x7522"/>
-    </label>
-    <label>
-        Description
-        <InputText @bind-Value="UpsertInput!.Description" placeholder="QinHeng CH340"/>
-    </label>
-    <button type="submit">Save</button>
-</EditForm>
+        <BbDialogFooter>
+            <BbButton Variant="ButtonVariant.Outline" OnClick="() => _formOpen = false">Cancel</BbButton>
+            <BbButton OnClick="UpsertAsync">Save</BbButton>
+        </BbDialogFooter>
+    </BbDialogContent>
+</BbDialog>
 
 @code {
     private UsbSerialFilter[] _filters = [];
-    private string? _error;
-    private string? _message;
+    private bool _loading = true;
 
-    // No initializer: the binder assigns this on every post and would overwrite one with null (BL0008).
-    [SupplyParameterFromForm]
-    private FilterInput? UpsertInput { get; set; }
+    private bool _formOpen;
+    private bool _editing;
+    private string _vid = string.Empty;
+    private string? _pid;
+    private string? _description;
 
-    /// <summary>Satisfies EditForm on the delete buttons, which carry an id and no fields.</summary>
-    private readonly EmptyInput _deleteModel = new();
+    protected override Task OnInitializedAsync() => LoadAsync();
 
-    protected override async Task OnInitializedAsync()
+    private async Task LoadAsync()
     {
-        UpsertInput ??= new FilterInput();
-        await LoadAsync();
+        _loading = true;
+        await using var scope = CreateScope();
+        _filters = await scope.Get<CatalogAdminService>().ListUsbSerialFiltersAsync();
+        _loading = false;
     }
-
-    private async Task LoadAsync() => _filters = await Catalog.ListUsbSerialFiltersAsync();
 
     private static string Hex(int value) => $"0x{value:X4}";
 
+    private void OpenCreate()
+    {
+        _editing = false;
+        ResetForm();
+        _formOpen = true;
+    }
+
+    private void OpenEdit(UsbSerialFilter filter)
+    {
+        _editing = true;
+        _formOpen = true;
+        _vid = Hex(filter.Vid);
+        _pid = filter.Pid is { } pid ? Hex(pid) : null;
+        _description = filter.Description;
+    }
+
+    private void ResetForm()
+    {
+        _vid = string.Empty;
+        _pid = null;
+        _description = null;
+    }
+
     private async Task UpsertAsync()
     {
-        if (!UsbIdentifier.TryParse(UpsertInput!.Vid, out var vid))
+        if (!UsbIdentifier.TryParse(_vid, out var vid))
         {
-            Report("VID and PID must be numbers, in hex (0x1A86) or decimal.", string.Empty);
+            ReportError("VID and PID must be numbers, in hex (0x1A86) or decimal.");
             return;
         }
 
         int? pid = null;
-        if (!string.IsNullOrWhiteSpace(UpsertInput.Pid))
+        if (!string.IsNullOrWhiteSpace(_pid))
         {
-            if (!UsbIdentifier.TryParse(UpsertInput.Pid, out var parsedPid))
+            if (!UsbIdentifier.TryParse(_pid, out var parsedPid))
             {
-                Report("VID and PID must be numbers, in hex (0x1A86) or decimal.", string.Empty);
+                ReportError("VID and PID must be numbers, in hex (0x1A86) or decimal.");
                 return;
             }
+
             pid = parsedPid;
         }
 
-        var description = string.IsNullOrWhiteSpace(UpsertInput.Description) ? null : UpsertInput.Description;
-        await Catalog.UpsertUsbSerialFilterAsync(vid, pid, description);
+        var description = string.IsNullOrWhiteSpace(_description) ? null : _description;
+
+        await using (var scope = CreateScope())
+        {
+            await scope.Get<CatalogAdminService>().UpsertUsbSerialFilterAsync(vid, pid, description);
+        }
+
         Report(null, "Saved.");
-        UpsertInput = new FilterInput();
+        _formOpen = false;
+        ResetForm();
         await LoadAsync();
     }
 
-    private async Task DeleteAsync(Guid id)
+    private async Task DeleteAsync(UsbSerialFilter filter)
     {
-        var result = await Catalog.DeleteUsbSerialFilterAsync(id);
+        var label = filter.Pid is { } pid ? $"{Hex(filter.Vid)}:{Hex(pid)}" : $"{Hex(filter.Vid)}:any";
+        if (!await ConfirmAsync("Delete filter", $"Delete the filter for {label}?")) return;
+
+        await using var scope = CreateScope();
+        var result = await scope.Get<CatalogAdminService>().DeleteUsbSerialFilterAsync(filter.Id);
 
         Report(
             result.Match<string?>(
@@ -123,19 +179,4 @@
             "Deleted.");
         await LoadAsync();
     }
-
-    private void Report(string? error, string success)
-    {
-        _error = error;
-        _message = error is null ? success : null;
-    }
-
-    private sealed class FilterInput
-    {
-        public string Vid { get; set; } = string.Empty;
-        public string? Pid { get; set; }
-        public string? Description { get; set; }
-    }
-
-    private sealed class EmptyInput;
 }

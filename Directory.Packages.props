@@ -4,13 +4,6 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <!-- Allow pinning vulnerable transitive dependencies via PackageVersion entries below -->
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <Company>OpenShock</Company>
-    <AssemblyVersion>1.0.0</AssemblyVersion>
-    <FileVersion>1.0.0</FileVersion>
-    <UserSecretsId>1e9d69ec-a751-45af-9dd2-312cc9964162</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
     <PackageVersion Include="Asp.Versioning.Mvc.ApiExplorer" Version="10.2.1" />
@@ -27,12 +20,14 @@
     <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="10.9.0" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
     <PackageVersion Include="MiniValidation" Version="0.10.0" />
+    <PackageVersion Include="AspNet.Security.OAuth.GitHub" Version="10.0.0" />
+    <PackageVersion Include="BlazorBlueprint.Components" Version="3.15.0" />
     <!-- Transitive-only pins for security advisories (GHSA-v5pm-xwqc-g5wc, GHSA-g94r-2vxg-569j) -->
     <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
     <PackageVersion Include="OpenTelemetry.Api" Version="1.17.0" />
     <PackageVersion Include="OneOf" Version="3.0.271" />
-    <PackageVersion Include="OpenShock.Internal.Common" Version="0.0.1" />
-    <PackageVersion Include="OpenShock.Internal.AspNet" Version="0.0.1" />
+    <PackageVersion Include="OpenShock.Internal.Common" Version="0.1.1" />
+    <PackageVersion Include="OpenShock.Internal.AspNet" Version="0.1.1" />
     <PackageVersion Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.11.2-beta.1" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.17.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.17.0" />
