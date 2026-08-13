@@ -31,6 +31,8 @@
     <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
     <PackageVersion Include="OpenTelemetry.Api" Version="1.17.0" />
     <PackageVersion Include="OneOf" Version="3.0.271" />
+    <PackageVersion Include="OpenShock.Internal.Common" Version="0.0.1" />
+    <PackageVersion Include="OpenShock.Internal.AspNet" Version="0.0.1" />
     <PackageVersion Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" Version="1.11.2-beta.1" />
     <PackageVersion Include="OpenTelemetry.Extensions.Hosting" Version="1.17.0" />
     <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.17.0" />

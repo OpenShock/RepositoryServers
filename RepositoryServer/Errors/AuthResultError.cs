@@ -1,5 +1,5 @@
 ﻿using System.Net;
-using OpenShock.RepositoryServer.Problems;
+using OpenShock.Internal.Common.Problems;
 
 namespace OpenShock.RepositoryServer.Errors;
 

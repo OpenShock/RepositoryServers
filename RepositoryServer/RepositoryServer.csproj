@@ -26,6 +26,8 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="MiniValidation" />
     <PackageReference Include="OneOf" />
+    <PackageReference Include="OpenShock.Internal.Common" />
+    <PackageReference Include="OpenShock.Internal.AspNet" />
     <PackageReference Include="OpenTelemetry.Exporter.Prometheus.AspNetCore" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />

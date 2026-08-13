@@ -1,12 +1,9 @@
-﻿using System.Net.Mime;
+using System.Net.Mime;
 using Microsoft.AspNetCore.Mvc;
-using OpenShock.RepositoryServer.Problems;
 
 namespace OpenShock.RepositoryServer.Controllers;
 
 [Consumes(MediaTypeNames.Application.Json)]
-public class OpenShockControllerBase : ControllerBase
+public class OpenShockControllerBase : OpenShock.Internal.Common.OpenShockControllerBase
 {
-    [NonAction]
-    public ObjectResult Problem(OpenShockProblem problem) => problem.ToObjectResult(HttpContext);
 }

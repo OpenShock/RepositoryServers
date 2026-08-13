@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
+using OpenShock.Internal.Common.Problems;
 using OpenShock.RepositoryServer.Config;
 using OpenShock.RepositoryServer.Errors;
 using OpenShock.RepositoryServer.Problems;
@@ -197,7 +198,7 @@ public static class AuthentikAuthentication
     {
         if (httpContext.Response.HasStarted) return Task.CompletedTask;
 
-        problem.AddContext(httpContext);
+        problem.RequestId = httpContext.TraceIdentifier;
         httpContext.Response.StatusCode = problem.Status!.Value;
 
         var serializerOptions = httpContext.RequestServices

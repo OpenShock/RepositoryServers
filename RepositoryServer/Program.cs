@@ -8,12 +8,13 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using OpenShock.Internal.Common.ExceptionHandling;
+using OpenShock.Internal.Common.Utils;
 using OpenShock.RepositoryServer;
 using OpenShock.RepositoryServer.AuthenticationHandlers;
 using OpenShock.RepositoryServer.Components;
 using OpenShock.RepositoryServer.Config;
 using OpenShock.RepositoryServer.Enums;
-using OpenShock.RepositoryServer.ExceptionHandler;
 using OpenShock.RepositoryServer.RepoServerDb;
 using OpenShock.RepositoryServer.Services;
 using OpenShock.RepositoryServer.Services.Admin;
@@ -56,7 +57,14 @@ builder.Host.UseSerilog((context, _, config) => config.ReadFrom.Configuration(co
 var config = builder.GetAndRegisterOpenShockConfig<ApiConfig>();
 
 // <---- ASP.NET ---->
-builder.Services.AddExceptionHandler<OpenShockExceptionHandler>();
+// The shared handler takes its serializer options directly rather than through DI, so it is
+// constructed by hand. AddExceptionHandler<T>() is just this singleton registration underneath.
+builder.Services.AddSingleton<Microsoft.AspNetCore.Diagnostics.IExceptionHandler>(sp =>
+    new OpenShockExceptionHandler(
+        sp.GetRequiredService<IHostEnvironment>(),
+        sp.GetRequiredService<ILoggerFactory>(),
+        sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>()
+            .Value.SerializerOptions));
 
 // The admin bypass exists only in Debug builds, only in Development, and only when asked for.
 // Release builds do not contain the handler at all, so the published image cannot be talked into it.

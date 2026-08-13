@@ -1,4 +1,4 @@
-﻿using OpenShock.RepositoryServer.Utils;
+﻿using OpenShock.Internal.Common.Utils;
 
 namespace OpenShock.RepositoryServer.Config;
 

@@ -1,4 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\RepositoryServer\RepositoryServer.csproj" />
+  </ItemGroup>
+
+  <!-- Props -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -11,13 +16,12 @@
     <Company>OpenShock.RepositoryServer.Tests</Company>
     <Product>OpenShock.RepositoryServer.Tests</Product>
   </PropertyGroup>
+
+  <!-- NuGet packages -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
-    <PackageReference Include="TUnit" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Testcontainers.PostgreSql" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\RepositoryServer\RepositoryServer.csproj" />
+    <PackageReference Include="TUnit" />
   </ItemGroup>
 </Project>
