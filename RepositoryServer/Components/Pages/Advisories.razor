@@ -1,0 +1,180 @@
+@page "/admin/firmware/advisories"
+@attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
+@inject AdvisoryAdminService AdvisoryService
+
+<h2>Advisories</h2>
+
+<p class="muted">
+    Warnings served on the public firmware manifest, so the flashtool and hubs can tell users about a
+    bad version. Affected versions is a semver range, e.g. <code>&lt;1.4.0</code>.
+</p>
+
+<StatusAlert Error="@_error" Message="@_message"/>
+
+<table>
+    <thead>
+    <tr>
+        <th>Severity</th>
+        <th>Title</th>
+        <th>Affects</th>
+        <th>Link</th>
+        <th></th>
+    </tr>
+    </thead>
+    <tbody>
+    @foreach (var advisory in _advisories)
+    {
+        <tr>
+            <td>@advisory.Severity.ToString().ToLowerInvariant()</td>
+            <td>@advisory.Title</td>
+            <td><code>@advisory.AffectedVersions</code></td>
+            <td class="muted">@(advisory.Url ?? "")</td>
+            <td>
+                <EditForm FormName="@($"delete-advisory-{advisory.Id}")" Model="_actionModel"
+                          OnValidSubmit="() => DeleteAsync(advisory.Id)">
+                    <AntiforgeryToken/>
+                    <button type="submit" class="danger">Delete</button>
+                </EditForm>
+            </td>
+        </tr>
+    }
+    @if (_advisories.Length == 0)
+    {
+        <tr>
+            <td colspan="5" class="empty">No advisories.</td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<h3>Add or edit</h3>
+
+<EditForm FormName="save-advisory" Model="SaveInput!" OnValidSubmit="SaveAsync" class="stack">
+    <AntiforgeryToken/>
+    <label>
+        Advisory
+        <InputSelect @bind-Value="SaveInput!.AdvisoryId">
+            <option value="">new advisory</option>
+            @foreach (var advisory in _advisories)
+            {
+                <option value="@advisory.Id">@advisory.Title</option>
+            }
+        </InputSelect>
+    </label>
+    <label>
+        Severity
+        <InputSelect @bind-Value="SaveInput!.Severity">
+            @foreach (var severity in Severities)
+            {
+                <option value="@severity">@severity.ToString().ToLowerInvariant()</option>
+            }
+        </InputSelect>
+    </label>
+    <label>
+        Title
+        <InputText @bind-Value="SaveInput!.Title" placeholder="OTA bricking bug"/>
+    </label>
+    <label>
+        Content
+        <InputTextArea @bind-Value="SaveInput!.Content" rows="4"/>
+    </label>
+    <label>
+        Affected versions
+        <InputText @bind-Value="SaveInput!.AffectedVersions" placeholder="&lt;1.4.0"/>
+    </label>
+    <label>
+        Link
+        <InputText @bind-Value="SaveInput!.Url" placeholder="https://github.com/OpenShock/firmware/issues/123"/>
+    </label>
+    <button type="submit">Save</button>
+</EditForm>
+
+@code {
+    private static readonly AdvisorySeverity[] Severities = Enum.GetValues<AdvisorySeverity>();
+
+    private FirmwareAdvisory[] _advisories = [];
+    private string? _error;
+    private string? _message;
+
+    // No initializer: the binder assigns this on every post and would overwrite one with null (BL0008).
+    [SupplyParameterFromForm(FormName = "save-advisory")]
+    private AdvisoryInput? SaveInput { get; set; }
+
+    /// <summary>Satisfies EditForm on the delete buttons, which carry an id and no fields.</summary>
+    private readonly EmptyInput _actionModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        SaveInput ??= new AdvisoryInput();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() => _advisories = await AdvisoryService.ListAsync();
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(SaveInput!.Title) ||
+            string.IsNullOrWhiteSpace(SaveInput.Content) ||
+            string.IsNullOrWhiteSpace(SaveInput.AffectedVersions))
+        {
+            Report("Title, content and affected versions are all required.", string.Empty);
+            return;
+        }
+
+        var url = string.IsNullOrWhiteSpace(SaveInput.Url) ? null : SaveInput.Url.Trim();
+
+        if (SaveInput.AdvisoryId is { } advisoryId)
+        {
+            var result = await AdvisoryService.UpdateAsync(
+                advisoryId, SaveInput.Severity, SaveInput.Title, SaveInput.Content,
+                SaveInput.AffectedVersions, url);
+
+            Report(
+                result.Match<string?>(
+                    _ => null,
+                    _ => "That advisory no longer exists."),
+                "Saved.");
+        }
+        else
+        {
+            await AdvisoryService.CreateAsync(
+                SaveInput.Severity, SaveInput.Title, SaveInput.Content, SaveInput.AffectedVersions, url);
+
+            Report(null, "Published to the manifest.");
+        }
+
+        SaveInput = new AdvisoryInput();
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(Guid advisoryId)
+    {
+        var result = await AdvisoryService.DeleteAsync(advisoryId);
+
+        Report(
+            result.Match<string?>(
+                _ => null,
+                _ => "That advisory no longer exists."),
+            "Deleted.");
+
+        await LoadAsync();
+    }
+
+    private void Report(string? error, string success)
+    {
+        _error = error;
+        _message = error is null ? success : null;
+    }
+
+    private sealed class AdvisoryInput
+    {
+        public Guid? AdvisoryId { get; set; }
+        public AdvisorySeverity Severity { get; set; } = AdvisorySeverity.Info;
+        public string Title { get; set; } = string.Empty;
+        public string Content { get; set; } = string.Empty;
+        public string AffectedVersions { get; set; } = string.Empty;
+        public string? Url { get; set; }
+    }
+
+    private sealed class EmptyInput;
+}

@@ -1,0 +1,260 @@
+@page "/admin/desktop/modules"
+@attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
+@inject ModuleAdminService ModuleService
+@inject PublisherAdminService PublisherService
+
+<h2>Desktop modules</h2>
+
+<p class="muted">
+    Modules served by the desktop repository index. The owning repository is the authorization decision
+    for publishing: a module with no owner is closed to every publisher rather than open to any, which
+    is the right state for one not yet wired to its CI.
+</p>
+
+<StatusAlert Error="@_error" Message="@_message"/>
+
+<table>
+    <thead>
+    <tr>
+        <th>Id</th>
+        <th>Name</th>
+        <th>Owner</th>
+        <th>Versions</th>
+        <th></th>
+    </tr>
+    </thead>
+    <tbody>
+    @foreach (var module in _modules)
+    {
+        <tr>
+            <td><code>@module.Id</code></td>
+            <td>@module.Name</td>
+            <td>
+                @if (OwnerName(module.RepositoryId) is { } owner)
+                {
+                    <span class="muted">@owner</span>
+                }
+                else
+                {
+                    <span class="empty">unassigned, cannot be published to</span>
+                }
+            </td>
+            <td class="muted">@module.Versions.Count</td>
+            <td>
+                <EditForm FormName="@($"delete-module-{module.Id}")" Model="_actionModel"
+                          OnValidSubmit="() => DeleteAsync(module.Id)">
+                    <AntiforgeryToken/>
+                    <button type="submit" class="danger">Delete</button>
+                </EditForm>
+            </td>
+        </tr>
+    }
+    @if (_modules.Length == 0)
+    {
+        <tr>
+            <td colspan="5" class="empty">No modules.</td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<h3>Add or edit</h3>
+
+<p class="muted">Saving an id that already exists updates that module.</p>
+
+<EditForm FormName="save-module" Model="SaveInput!" OnValidSubmit="SaveAsync" class="stack">
+    <AntiforgeryToken/>
+    <label>
+        Id
+        <InputText @bind-Value="SaveInput!.Id" placeholder="openshock.overlay"/>
+    </label>
+    <label>
+        Name
+        <InputText @bind-Value="SaveInput!.Name" placeholder="Overlay"/>
+    </label>
+    <label>
+        Description
+        <InputTextArea @bind-Value="SaveInput!.Description" rows="3"/>
+    </label>
+    <label>
+        Source URL
+        <InputText @bind-Value="SaveInput!.SourceUrl" placeholder="https://github.com/OpenShock/desktop"/>
+    </label>
+    <label>
+        Icon URL
+        <InputText @bind-Value="SaveInput!.IconUrl"/>
+    </label>
+    <label>
+        Owning repository
+        <InputSelect @bind-Value="SaveInput!.RepositoryId">
+            <option value="">unassigned</option>
+            @foreach (var repository in _repositories)
+            {
+                <option value="@repository.Id">@repository.Owner/@repository.Repo</option>
+            }
+        </InputSelect>
+    </label>
+    <button type="submit">Save</button>
+</EditForm>
+
+@if (_versions.Length > 0)
+{
+    <h3>Published versions</h3>
+
+    <p class="muted">
+        Removing a version withdraws it from the index. The zip stays in storage so a client mid-download
+        is not cut off.
+    </p>
+
+    <table>
+        <thead>
+        <tr>
+            <th>Module</th>
+            <th>Version</th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody>
+        @foreach (var version in _versions)
+        {
+            <tr>
+                <td><code>@version.Module</code></td>
+                <td><code>@version.VersionName</code></td>
+                <td>
+                    <EditForm FormName="@($"delete-version-{version.Module}-{version.VersionName}")"
+                              Model="_actionModel"
+                              OnValidSubmit="() => DeleteVersionAsync(version.Module, version.VersionName)">
+                        <AntiforgeryToken/>
+                        <button type="submit" class="danger">Withdraw</button>
+                    </EditForm>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+@code {
+    private Module[] _modules = [];
+    private SourceRepository[] _repositories = [];
+    private ModuleVersion[] _versions = [];
+    private string? _error;
+    private string? _message;
+
+    // No initializer: the binder assigns this on every post and would overwrite one with null (BL0008).
+    [SupplyParameterFromForm(FormName = "save-module")]
+    private ModuleInput? SaveInput { get; set; }
+
+    /// <summary>Satisfies EditForm on the row buttons, which carry an id and no fields.</summary>
+    private readonly EmptyInput _actionModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        SaveInput ??= new ModuleInput();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _modules = await ModuleService.ListAsync();
+        _repositories = await PublisherService.ListAsync();
+        _versions = _modules
+            .SelectMany(m => m.Versions.Select(v => new ModuleVersion(m.Id, v.VersionName)))
+            .OrderBy(v => v.Module)
+            .ThenBy(v => v.VersionName)
+            .ToArray();
+    }
+
+    private string? OwnerName(Guid? repositoryId)
+    {
+        if (repositoryId is not { } id) return null;
+        var repository = _repositories.FirstOrDefault(r => r.Id == id);
+        return repository is null ? null : $"{repository.Owner}/{repository.Repo}";
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(SaveInput!.Id) || string.IsNullOrWhiteSpace(SaveInput.Name))
+        {
+            Report("Id and name are both required.", string.Empty);
+            return;
+        }
+
+        if (!TryParseUri(SaveInput.SourceUrl, out var sourceUrl) ||
+            !TryParseUri(SaveInput.IconUrl, out var iconUrl))
+        {
+            Report("Source and icon must be absolute URLs, or left empty.", string.Empty);
+            return;
+        }
+
+        var result = await ModuleService.UpsertAsync(
+            SaveInput.Id.Trim(),
+            SaveInput.Name.Trim(),
+            SaveInput.Description ?? string.Empty,
+            sourceUrl,
+            iconUrl,
+            SaveInput.RepositoryId);
+
+        Report(
+            result.Match<string?>(
+                _ => null,
+                missing => $"No such {missing.Reference}."),
+            "Saved.");
+
+        SaveInput = new ModuleInput();
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(string moduleId)
+    {
+        var result = await ModuleService.DeleteAsync(moduleId);
+
+        Report(
+            result.Match<string?>(
+                _ => null,
+                _ => "That module no longer exists."),
+            "Deleted.");
+
+        await LoadAsync();
+    }
+
+    private async Task DeleteVersionAsync(string moduleId, string version)
+    {
+        var result = await ModuleService.DeleteVersionAsync(moduleId, version);
+
+        Report(
+            result.Match<string?>(
+                _ => null,
+                _ => "That version no longer exists."),
+            $"Withdrew {moduleId} {version}.");
+
+        await LoadAsync();
+    }
+
+    private static bool TryParseUri(string? raw, out Uri? uri)
+    {
+        uri = null;
+        if (string.IsNullOrWhiteSpace(raw)) return true;
+        return Uri.TryCreate(raw.Trim(), UriKind.Absolute, out uri);
+    }
+
+    private void Report(string? error, string success)
+    {
+        _error = error;
+        _message = error is null ? success : null;
+    }
+
+    private sealed record ModuleVersion(string Module, string VersionName);
+
+    private sealed class ModuleInput
+    {
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public string? SourceUrl { get; set; }
+        public string? IconUrl { get; set; }
+        public Guid? RepositoryId { get; set; }
+    }
+
+    private sealed class EmptyInput;
+}

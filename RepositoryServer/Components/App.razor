@@ -1,0 +1,56 @@
+@*
+    Root document for the admin UI.
+
+    There is no blazor.web.js and no render mode: every page here is static server-side rendered.
+    That is the point of the whole thing. Rendering on the server means an unauthenticated visitor is
+    redirected at the endpoint, before a single element exists, so there is no shell to leak what the
+    admin surface contains and nothing client-side to talk out of.
+*@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Repository Server Admin</title>
+    <link rel="icon" href="data:,"/>
+    <style>
+        :root { color-scheme: light dark; --border: #8883; --muted: #8886; }
+        body { margin: 0; font: 15px/1.5 system-ui, sans-serif; }
+        header { display: flex; gap: 1.5rem; align-items: baseline; justify-content: space-between;
+                 padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); }
+        header h1 { font-size: 1rem; margin: 0; font-weight: 600; }
+        header h1 a { text-decoration: none; color: inherit; }
+        .shell { display: flex; align-items: flex-start; }
+        nav { display: flex; flex-direction: column; gap: .35rem; padding: 1.5rem 1rem;
+              border-right: 1px solid var(--border); min-width: 11rem; }
+        nav a { text-decoration: none; }
+        nav a:hover { text-decoration: underline; }
+        nav .group { font-size: .75rem; text-transform: uppercase; letter-spacing: .05em;
+                     color: var(--muted); margin-top: .9rem; }
+        main { padding: 1.5rem; flex: 1; min-width: 0; }
+        h3 { margin-top: 2rem; }
+        table { border-collapse: collapse; width: 100%; max-width: 60rem; }
+        th, td { text-align: left; padding: .4rem .75rem; border-bottom: 1px solid var(--border); }
+        th { font-weight: 600; }
+        code { font-family: ui-monospace, monospace; font-size: .9em; }
+        .muted { color: var(--muted); }
+        .empty { color: var(--muted); font-style: italic; }
+        .bypass { background: #b3261e; color: #fff; padding: .5rem 1.5rem; font-weight: 600; }
+        .problem { color: #b3261e; font-weight: 600; }
+        .ok { color: #1a7f37; }
+        .stack { display: flex; flex-direction: column; gap: .6rem; max-width: 34rem; margin: 1rem 0 2rem; }
+        .stack label { display: flex; flex-direction: column; gap: .2rem; }
+        .stack label.inline, label.inline { flex-direction: row; align-items: center; gap: .4rem; }
+        .stack button { align-self: flex-start; padding: .35rem 1rem; }
+        .row-form { display: flex; gap: .3rem; align-items: center; }
+        .actions { display: flex; gap: .4rem; }
+        fieldset { border: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: .75rem; }
+        input, select, textarea { font: inherit; padding: .25rem; }
+        .danger { color: #b3261e; }
+    </style>
+    <HeadOutlet/>
+</head>
+<body>
+<Routes/>
+</body>
+</html>

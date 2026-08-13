@@ -1,0 +1,20 @@
+@*
+    Result of the last operation on a page. Takes plain text: services report outcomes in domain terms
+    and each page decides how to word them, so nothing here knows about problem documents.
+*@
+@if (!string.IsNullOrEmpty(Error))
+{
+    <p class="problem" role="alert">@Error</p>
+}
+else if (!string.IsNullOrEmpty(Message))
+{
+    <p class="ok" role="status">@Message</p>
+}
+
+@code {
+    /// <summary>Why the last operation was refused.</summary>
+    [Parameter] public string? Error { get; set; }
+
+    /// <summary>Confirmation of an operation that succeeded.</summary>
+    [Parameter] public string? Message { get; set; }
+}

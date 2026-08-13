@@ -4,20 +4,24 @@ using Asp.Versioning;
 using EntityFramework.Exceptions.PostgreSQL;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenShock.RepositoryServer;
 using OpenShock.RepositoryServer.AuthenticationHandlers;
+using OpenShock.RepositoryServer.Components;
 using OpenShock.RepositoryServer.Config;
 using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.ExceptionHandler;
 using OpenShock.RepositoryServer.RepoServerDb;
 using OpenShock.RepositoryServer.Services;
+using OpenShock.RepositoryServer.Services.Admin;
 using OpenShock.RepositoryServer.Utils;
 using OpenTelemetry.Metrics;
 using Scalar.AspNetCore;
 using Serilog;
+using ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders;
 using ValidationProblem = OpenShock.RepositoryServer.Problems.ValidationProblem;
 
 var builder = WebApplication.CreateSlimBuilder(args);
@@ -54,15 +58,82 @@ var config = builder.GetAndRegisterOpenShockConfig<ApiConfig>();
 // <---- ASP.NET ---->
 builder.Services.AddExceptionHandler<OpenShockExceptionHandler>();
 
-builder.Services.AddAuthentication()
-    .AddScheme<AuthenticationSchemeOptions, AdminTokenAuthentication>(
-        AuthSchemas.AdminToken, _ => { })
-    .AddJwtBearer(AuthSchemas.CiCdToken, options =>
+// The admin bypass exists only in Debug builds, only in Development, and only when asked for.
+// Release builds do not contain the handler at all, so the published image cannot be talked into it.
+#if DEBUG
+var devAdminBypass = isDevelopment && config.DevAuth.BypassAuthentik;
+#else
+const bool devAdminBypass = false;
+#endif
+
+if (!devAdminBypass && config.Authentik is null)
+{
+    Console.WriteLine("Error validating config: the Authentik section is required.");
+    Console.WriteLine("Admin endpoints have no other credential, so a server without it cannot be administered.");
+    Console.WriteLine("For local development, run in the Development environment with DevAuth:BypassAuthentik=true.");
+    Environment.Exit(-10);
+}
+
+if (devAdminBypass)
+{
+    Console.WriteLine("###############################################################");
+    Console.WriteLine("# AUTHENTIK BYPASS ACTIVE. Every caller is an administrator.  #");
+    Console.WriteLine("# Development builds only. Never expose this to a network.    #");
+    Console.WriteLine("###############################################################");
+}
+
+builder.Services.AddSingleton(new AdminAuthMode(devAdminBypass));
+
+var authenticationBuilder = builder.Services.AddAuthentication();
+
+if (devAdminBypass)
+{
+#if DEBUG
+    // Stands in for the cookie scheme rather than adding another, so the policy, the endpoints and
+    // the claims they read stay exactly as they are in production.
+    authenticationBuilder.AddScheme<AuthenticationSchemeOptions, DevAdminAuthentication>(
+        AuthSchemas.AdminCookie, _ => { });
+#endif
+}
+else
+{
+    var authentik = config.Authentik!;
+
+    authenticationBuilder
+        .AddCookie(AuthSchemas.AdminCookie, options =>
+        {
+            AuthentikAuthentication.ConfigureCookie(options, authentik);
+        })
+        .AddOpenIdConnect(AuthSchemas.AdminOidc, options =>
+        {
+            AuthentikAuthentication.ConfigureOidc(options, authentik);
+        });
+
+    // Session cookies are encrypted with data protection keys. Left at the default they live in the
+    // container filesystem, so every replica mints cookies the others reject and a rollout logs
+    // everyone out. Persisting them to a shared volume is what makes more than one replica viable.
+    if (!string.IsNullOrWhiteSpace(authentik.DataProtectionKeyPath))
     {
-        GitHubOidcAuthentication.Configure(options, config.CiCd.Audience);
-    });
+        builder.Services.AddDataProtection()
+            .PersistKeysToFileSystem(new DirectoryInfo(authentik.DataProtectionKeyPath))
+            .SetApplicationName("OpenShock.RepositoryServer");
+    }
+}
+
+authenticationBuilder.AddJwtBearer(AuthSchemas.CiCdToken, options =>
+{
+    GitHubOidcAuthentication.Configure(options, config.CiCd.Audience);
+});
+
+var adminGroup = config.Authentik?.AdminGroup ?? AdminAuthMode.DevFallbackGroup;
 
 builder.Services.AddAuthorizationBuilder()
+    // Admin endpoints authorize against the session cookie, never against the OIDC scheme: by the
+    // time a request carries a session, Authentik's part is finished.
+    .AddPolicy(AuthSchemas.Policies.Admin, policy => policy
+        .AddAuthenticationSchemes(AuthSchemas.AdminCookie)
+        .RequireAuthenticatedUser()
+        .RequireClaim(AuthSchemas.AdminClaims.Group, adminGroup))
     // Firmware and desktop ingestion share the CI/CD scheme, so being authenticated is not enough:
     // each endpoint requires the scope its grant was issued for.
     .AddPolicy(AuthSchemas.Policies.PublishFirmware, policy => policy
@@ -81,6 +152,12 @@ builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
     options.SerializerOptions.Converters.Add(new SemVersionConverter());
 });
+
+// Admin UI. Static server-side rendering only, no interactive render mode and no Blazor script: an
+// unauthenticated request is turned away by the authorization middleware at the endpoint, so no
+// markup is produced for anyone who is not already an admin.
+builder.Services.AddRazorComponents();
+builder.Services.AddCascadingAuthenticationState();
 
 builder.Services.AddControllers().AddJsonOptions(x =>
 {
@@ -103,6 +180,24 @@ apiVersioningBuilder.AddApiExplorer(setup =>
     setup.AssumeDefaultVersionWhenUnspecified = true;
 });
 
+// The OIDC redirect_uri is built from the incoming request, so behind an ingress that terminates TLS
+// the server would otherwise send Authentik an http:// callback that does not match what is
+// registered, and the login fails at the last hop.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto |
+                               ForwardedHeaders.XForwardedHost;
+
+    // Only an in-cluster ingress is trusted to rewrite these. Accepting them from anywhere would let
+    // a caller claim any client IP, which the metrics endpoint uses for access control.
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+    foreach (var network in TrustedProxiesFetcher.PrivateNetworks)
+    {
+        options.KnownIPNetworks.Add(IPNetwork.Parse(network));
+    }
+});
+
 // generic ASP.NET stuff
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpContextAccessor();
@@ -112,13 +207,19 @@ builder.Services.TryAddSingleton<TimeProvider>(provider => TimeProvider.System);
 
 builder.Services.AddOpenApi("1");
 
+// Any origin may read the public firmware catalog: the flashtool and CLI tools are cross-origin by
+// nature and the data is public anyway.
+//
+// Credentials are deliberately NOT allowed. Admin auth is a session cookie, and reflecting arbitrary
+// origins while allowing credentials would let any page a logged-in admin visits call the admin
+// endpoints with their session attached. The admin UI is served from this origin, so it never needs
+// CORS at all.
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(corsPolicyBuilder =>
     {
-        corsPolicyBuilder.SetIsOriginAllowed(s => true);
+        corsPolicyBuilder.AllowAnyOrigin();
         corsPolicyBuilder.AllowAnyHeader();
-        corsPolicyBuilder.AllowCredentials();
         corsPolicyBuilder.AllowAnyMethod();
         corsPolicyBuilder.SetPreflightMaxAge(TimeSpan.FromHours(24));
     });
@@ -178,6 +279,16 @@ switch (config.Firmware.Storage.Type)
 builder.Services.AddHttpClient(nameof(DiscordNotificationService));
 builder.Services.AddSingleton<IDiscordNotificationService, DiscordNotificationService>();
 
+// <---- Admin services ---->
+// All administration goes through these. The management UI is their only caller today; a
+// token-authenticated automation API would sit on top of the same services rather than beside them.
+builder.Services.AddScoped<CatalogAdminService>();
+builder.Services.AddScoped<PublisherAdminService>();
+builder.Services.AddScoped<AdvisoryAdminService>();
+builder.Services.AddScoped<DiscordWebhookAdminService>();
+builder.Services.AddScoped<ReleaseAdminService>();
+builder.Services.AddScoped<ModuleAdminService>();
+
 // <---- Background cleanup ---->
 builder.Services.AddHostedService<StagedReleaseCleanupService>();
 
@@ -225,6 +336,9 @@ else
     Log.Warning("Skipping possible database migrations...");
 }
 
+// Must run before anything reads the scheme, host or client IP, which means before request logging.
+app.UseForwardedHeaders();
+
 app.UseSerilogRequestLogging();
 
 // Enable request body buffering. Needed to allow rewinding the body reader,
@@ -258,8 +372,13 @@ app.UseOpenTelemetryPrometheusScrapingEndpoint(context =>
     return remoteIp != null && metricsAllowedIpNetworks.Any(x => x.Contains(remoteIp));
 });
 
+// Required by the Razor Components endpoints. Cookie-authenticated state changes need it, and
+// MapRazorComponents refuses to serve without the middleware present.
+app.UseAntiforgery();
+
 app.MapOpenApi();
 app.MapControllers();
+app.MapRazorComponents<App>();
 
 app.MapScalarApiReference(options => options.AddDocument("1"));
 

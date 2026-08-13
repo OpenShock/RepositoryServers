@@ -1,0 +1,303 @@
+@page "/admin/firmware/boards"
+@attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
+@inject CatalogAdminService Catalog
+
+<h2>Boards</h2>
+
+<p class="muted">
+    A board's name is what a hub reports as its own, compiled in as <code>OPENSHOCK_FW_BOARD</code>, so
+    it has to match the <code>[env:...]</code> name in the firmware repository exactly. It is also the
+    board's segment in artifact URLs, so only URL-safe characters are accepted.
+</p>
+
+<StatusAlert Error="@_error" Message="@_message"/>
+
+<table>
+    <thead>
+    <tr>
+        <th>Name</th>
+        <th>Chip</th>
+        <th>Required artifacts</th>
+        <th>USB devices</th>
+        <th>Status</th>
+        <th></th>
+    </tr>
+    </thead>
+    <tbody>
+    @foreach (var board in _boards)
+    {
+        <tr>
+            <td><code>@board.Name</code></td>
+            <td>@board.ChipNavigation.Name</td>
+            <td class="muted">@FormatArtifactTypes(board.RequiredArtifactTypes)</td>
+            <td class="muted">@AttachedDeviceNames(board.Id)</td>
+            <td>@(board.Discontinued ? "discontinued" : "active")</td>
+            <td class="actions">
+                <EditForm FormName="@($"discontinue-board-{board.Id}")" Model="_actionModel"
+                          OnValidSubmit="() => SetDiscontinuedAsync(board.Id, !board.Discontinued)">
+                    <AntiforgeryToken/>
+                    <button type="submit">@(board.Discontinued ? "Reinstate" : "Discontinue")</button>
+                </EditForm>
+                <EditForm FormName="@($"delete-board-{board.Id}")" Model="_actionModel"
+                          OnValidSubmit="() => DeleteAsync(board.Id)">
+                    <AntiforgeryToken/>
+                    <button type="submit" class="danger">Delete</button>
+                </EditForm>
+            </td>
+        </tr>
+    }
+    @if (_boards.Length == 0)
+    {
+        <tr>
+            <td colspan="6" class="empty">
+                No boards. Release init rejects a board it does not know, so CI cannot publish yet.
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<h3>Add or edit</h3>
+
+<p class="muted">Saving a name that already exists updates that board instead of adding another.</p>
+
+<EditForm FormName="save-board" Model="SaveInput!" OnValidSubmit="SaveAsync" class="stack">
+    <AntiforgeryToken/>
+    <label>
+        Board
+        <InputSelect @bind-Value="SaveInput!.BoardId">
+            <option value="">new board</option>
+            @foreach (var board in _boards)
+            {
+                <option value="@board.Id">@board.Name</option>
+            }
+        </InputSelect>
+    </label>
+    <label>
+        Name
+        <InputText @bind-Value="SaveInput!.Name" placeholder="Wemos-D1-Mini-ESP32"/>
+    </label>
+    <label>
+        Chip
+        <InputSelect @bind-Value="SaveInput!.ChipId">
+            <option value="">select</option>
+            @foreach (var chip in _chips)
+            {
+                <option value="@chip.Id">@chip.Name</option>
+            }
+        </InputSelect>
+    </label>
+    <fieldset>
+        <legend>Required artifacts</legend>
+        <span class="muted">What an OTA update must supply. Publish refuses a board missing any of these.</span>
+        @foreach (var artifactType in ArtifactTypes)
+        {
+            <label class="inline">
+                <input type="checkbox" name="SaveInput.RequiredArtifactTypes" value="@artifactType"
+                       checked="@(SaveInput!.RequiredArtifactTypes?.Contains(artifactType) == true)"/>
+                @artifactType.ToString().ToLowerInvariant()
+            </label>
+        }
+    </fieldset>
+    <button type="submit">Save</button>
+</EditForm>
+
+<h3>USB devices</h3>
+
+<p class="muted">On-board USB-to-serial converters, used to recognise the board in the flashtool.</p>
+
+<EditForm FormName="attach-board-usb" Model="AttachInput!" OnValidSubmit="AttachAsync" class="stack">
+    <AntiforgeryToken/>
+    <label>
+        Board
+        <InputSelect @bind-Value="AttachInput!.BoardId">
+            <option value="">select</option>
+            @foreach (var board in _boards)
+            {
+                <option value="@board.Id">@board.Name</option>
+            }
+        </InputSelect>
+    </label>
+    <label>
+        Device
+        <InputSelect @bind-Value="AttachInput!.UsbDeviceId">
+            <option value="">select</option>
+            @foreach (var device in _usbDevices)
+            {
+                <option value="@device.Id">@device.Name (0x@device.Vid.ToString("X4"):0x@device.Pid.ToString("X4"))</option>
+            }
+        </InputSelect>
+    </label>
+    <label class="inline">
+        <InputCheckbox @bind-Value="AttachInput!.Detach"/>
+        detach instead
+    </label>
+    <button type="submit">Apply</button>
+</EditForm>
+
+@code {
+    private static readonly FirmwareArtifactType[] ArtifactTypes = Enum.GetValues<FirmwareArtifactType>();
+
+    private FirmwareBoard[] _boards = [];
+    private FirmwareChip[] _chips = [];
+    private UsbDevice[] _usbDevices = [];
+    private FirmwareBoardUsbDevice[] _attachments = [];
+    private string? _error;
+    private string? _message;
+
+    // No initializer: the binder assigns these on every post and would overwrite one with null (BL0008).
+    [SupplyParameterFromForm(FormName = "save-board")]
+    private BoardInput? SaveInput { get; set; }
+
+    [SupplyParameterFromForm(FormName = "attach-board-usb")]
+    private AttachInputModel? AttachInput { get; set; }
+
+    /// <summary>Satisfies EditForm on the row buttons, which carry an id and no fields.</summary>
+    private readonly EmptyInput _actionModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        SaveInput ??= new BoardInput();
+        AttachInput ??= new AttachInputModel();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _boards = await Catalog.ListBoardsAsync();
+        _chips = await Catalog.ListChipsAsync();
+        _usbDevices = await Catalog.ListUsbDevicesAsync();
+        _attachments = await Catalog.ListBoardUsbDevicesAsync();
+    }
+
+    private static string FormatArtifactTypes(FirmwareArtifactType[] types) =>
+        types.Length == 0 ? "none" : string.Join(", ", types.Select(t => t.ToString().ToLowerInvariant()));
+
+    private string AttachedDeviceNames(Guid boardId)
+    {
+        var names = _attachments
+            .Where(a => a.BoardId == boardId)
+            .Select(a => _usbDevices.FirstOrDefault(d => d.Id == a.UsbDeviceId)?.Name)
+            .Where(n => n is not null)
+            .ToArray();
+
+        return names.Length == 0 ? "none" : string.Join(", ", names);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (SaveInput!.ChipId is not { } chipId)
+        {
+            Report("Pick a chip.", string.Empty);
+            return;
+        }
+
+        // The binder nulls a collection property when the post carries none of its values, which
+        // is exactly what an all-unchecked set of checkboxes looks like.
+        var required = SaveInput.RequiredArtifactTypes?.ToArray() ?? [];
+
+        if (SaveInput.BoardId is { } boardId)
+        {
+            var updated = await Catalog.UpdateBoardAsync(boardId, SaveInput.Name ?? string.Empty, chipId, required);
+            Report(
+                updated.Match<string?>(
+                    _ => null,
+                    _ => "That board no longer exists.",
+                    missing => $"No such {missing.Reference}.",
+                    conflict => $"A board named \"{conflict.Name}\" already exists.",
+                    invalid => InvalidNameMessage(invalid)),
+                "Saved.");
+        }
+        else
+        {
+            var created = await Catalog.CreateBoardAsync(SaveInput.Name ?? string.Empty, chipId, required);
+            Report(
+                created.Match<string?>(
+                    _ => null,
+                    missing => $"No such {missing.Reference}.",
+                    conflict => $"A board named \"{conflict.Name}\" already exists.",
+                    invalid => InvalidNameMessage(invalid)),
+                $"Created {SaveInput.Name}.");
+        }
+
+        SaveInput = new BoardInput();
+        await LoadAsync();
+    }
+
+    private static string InvalidNameMessage(InvalidName invalid) =>
+        $"\"{invalid.Name}\" is not a usable board name. Use letters, digits, '.', '_' or '-', " +
+        "starting with a letter or digit.";
+
+    private async Task SetDiscontinuedAsync(Guid boardId, bool discontinued)
+    {
+        var result = await Catalog.SetBoardDiscontinuedAsync(boardId, discontinued);
+
+        Report(
+            result.Match<string?>(
+                _ => null,
+                _ => "That board no longer exists."),
+            discontinued ? "Discontinued. Existing hubs keep updating." : "Reinstated.");
+
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(Guid boardId)
+    {
+        var result = await Catalog.DeleteBoardAsync(boardId);
+
+        Report(
+            result.Match<string?>(
+                _ => null,
+                _ => "That board no longer exists.",
+                inUse => $"Cannot delete: still referenced by {inUse.ReferencedBy}."),
+            "Deleted.");
+
+        await LoadAsync();
+    }
+
+    private async Task AttachAsync()
+    {
+        if (AttachInput!.BoardId is not { } boardId || AttachInput.UsbDeviceId is not { } deviceId) return;
+
+        if (AttachInput.Detach)
+        {
+            await Catalog.DetachUsbDeviceFromBoardAsync(boardId, deviceId);
+            Report(null, "Detached.");
+        }
+        else
+        {
+            var result = await Catalog.AttachUsbDeviceToBoardAsync(boardId, deviceId);
+            Report(
+                result.Match<string?>(
+                    _ => null,
+                    missing => $"No such {missing.Reference}."),
+                "Attached.");
+        }
+
+        AttachInput = new AttachInputModel();
+        await LoadAsync();
+    }
+
+    private void Report(string? error, string success)
+    {
+        _error = error;
+        _message = error is null ? success : null;
+    }
+
+    private sealed class BoardInput
+    {
+        public Guid? BoardId { get; set; }
+        public string? Name { get; set; }
+        public Guid? ChipId { get; set; }
+        public List<FirmwareArtifactType>? RequiredArtifactTypes { get; set; }
+    }
+
+    private sealed class AttachInputModel
+    {
+        public Guid? BoardId { get; set; }
+        public Guid? UsbDeviceId { get; set; }
+        public bool Detach { get; set; }
+    }
+
+    private sealed class EmptyInput;
+}

@@ -1,0 +1,45 @@
+@inherits LayoutComponentBase
+@inject AdminAuthMode AuthMode
+
+@if (AuthMode.DevBypass)
+{
+    <div class="bypass">Authentik bypass active. Every caller is an administrator.</div>
+}
+
+<header>
+    <h1><a href="/admin">Repository Server</a></h1>
+    <AuthorizeView>
+        <Authorized>
+            <span class="muted">@context.User.Identity?.Name</span>
+            <a href="/auth/logout">Sign out</a>
+        </Authorized>
+    </AuthorizeView>
+</header>
+
+<div class="shell">
+    @*
+        Shared first, then one section per distribution domain. Publishers and Discord webhooks sit in
+        the shared group because both are genuinely cross-domain: the repositories table is the publish
+        allowlist for firmware and desktop alike, and both notify through the same webhooks.
+    *@
+    <nav>
+        <a href="/admin">Status</a>
+        <a href="/admin/repositories">Publishers</a>
+        <a href="/admin/discord-webhooks">Discord</a>
+
+        <span class="group">Firmware</span>
+        <a href="/admin/firmware/releases">Releases</a>
+        <a href="/admin/firmware/boards">Boards</a>
+        <a href="/admin/firmware/chips">Chips</a>
+        <a href="/admin/firmware/usb-devices">USB devices</a>
+        <a href="/admin/firmware/usb-serial-filters">Serial filters</a>
+        <a href="/admin/firmware/advisories">Advisories</a>
+
+        <span class="group">Desktop</span>
+        <a href="/admin/desktop/modules">Modules</a>
+    </nav>
+
+    <main>
+        @Body
+    </main>
+</div>

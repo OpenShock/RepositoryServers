@@ -1,0 +1,147 @@
+@page "/admin"
+@attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
+@inject RepoServerContext Db
+
+<h2>Status</h2>
+
+<h3>Shared</h3>
+
+<table>
+    <tbody>
+    <tr>
+        <th>Registered publishers</th>
+        <td>
+            @_publisherCount
+            @if (_publishersWithoutScopes > 0)
+            {
+                <span class="muted">(@_publishersWithoutScopes cannot publish anything)</span>
+            }
+        </td>
+    </tr>
+    <tr>
+        <th>Discord webhooks</th>
+        <td>
+            @_webhookCount
+            @if (_disabledWebhooks > 0)
+            {
+                <span class="muted">(@_disabledWebhooks disabled)</span>
+            }
+        </td>
+    </tr>
+    </tbody>
+</table>
+
+<h3>Firmware</h3>
+
+<table>
+    <tbody>
+    <tr>
+        <th>Published versions</th>
+        <td>@_versionCount</td>
+    </tr>
+    <tr>
+        <th>Releases awaiting review</th>
+        <td>
+            @if (_editingCount > 0)
+            {
+                <strong>@_editingCount</strong>
+                <span class="muted">changelog must be fixed before publish</span>
+            }
+            else
+            {
+                <span>0</span>
+            }
+        </td>
+    </tr>
+    <tr>
+        <th>Releases in flight</th>
+        <td>@_stagingCount</td>
+    </tr>
+    <tr>
+        <th>Boards</th>
+        <td>
+            @_boardCount
+            @if (_discontinuedCount > 0)
+            {
+                <span class="muted">(@_discontinuedCount discontinued)</span>
+            }
+        </td>
+    </tr>
+    <tr>
+        <th>Chips</th>
+        <td>@_chipCount</td>
+    </tr>
+    <tr>
+        <th>Advisories</th>
+        <td>@_advisoryCount</td>
+    </tr>
+    </tbody>
+</table>
+
+@if (_boardCount == 0 || _chipCount == 0)
+{
+    <p class="problem">
+        Release init rejects a board it does not know, so CI cannot publish firmware until chips and
+        boards exist.
+    </p>
+}
+
+<h3>Desktop</h3>
+
+<table>
+    <tbody>
+    <tr>
+        <th>Modules</th>
+        <td>
+            @_moduleCount
+            @if (_unassignedModules > 0)
+            {
+                <span class="muted">(@_unassignedModules unassigned, closed to every publisher)</span>
+            }
+        </td>
+    </tr>
+    <tr>
+        <th>Published versions</th>
+        <td>@_moduleVersionCount</td>
+    </tr>
+    </tbody>
+</table>
+
+@code {
+    private int _publisherCount;
+    private int _publishersWithoutScopes;
+    private int _webhookCount;
+    private int _disabledWebhooks;
+
+    private int _versionCount;
+    private int _editingCount;
+    private int _stagingCount;
+    private int _boardCount;
+    private int _discontinuedCount;
+    private int _chipCount;
+    private int _advisoryCount;
+
+    private int _moduleCount;
+    private int _unassignedModules;
+    private int _moduleVersionCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _publisherCount = await Db.Repositories.CountAsync();
+        _publishersWithoutScopes = await Db.Repositories.CountAsync(r => r.Scopes.Length == 0);
+        _webhookCount = await Db.DiscordWebhooks.CountAsync();
+        _disabledWebhooks = await Db.DiscordWebhooks.CountAsync(w => !w.Enabled);
+
+        _versionCount = await Db.FirmwareVersions.CountAsync();
+        _editingCount = await Db.FirmwareReleases.CountAsync(r => r.Status == ReleaseStatus.Editing);
+        _stagingCount = await Db.FirmwareReleases.CountAsync(r => r.Status == ReleaseStatus.Staging);
+        _boardCount = await Db.FirmwareBoards.CountAsync();
+        _discontinuedCount = await Db.FirmwareBoards.CountAsync(b => b.Discontinued);
+        _chipCount = await Db.FirmwareChips.CountAsync();
+        _advisoryCount = await Db.FirmwareAdvisories.CountAsync();
+
+        _moduleCount = await Db.Modules.CountAsync();
+        _unassignedModules = await Db.Modules.CountAsync(m => m.RepositoryId == null);
+        _moduleVersionCount = await Db.Versions.CountAsync();
+    }
+}

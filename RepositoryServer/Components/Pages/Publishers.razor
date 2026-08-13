@@ -1,0 +1,167 @@
+@page "/admin/repositories"
+@attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
+@inject PublisherAdminService PublisherService
+
+<h2>Publishers</h2>
+
+<p class="muted">
+    Repositories allowed to publish through CI. Validating a GitHub OIDC token proves a workflow ran
+    somewhere on GitHub, not that it ran somewhere we trust, so registration here is the authorization
+    decision. Scopes decide what a repository may publish; one with no scopes can publish nothing.
+</p>
+
+<StatusAlert Error="@_error" Message="@_message"/>
+
+<table>
+    <thead>
+    <tr>
+        <th>Repository</th>
+        <th>Provider</th>
+        <th>Scopes</th>
+        <th></th>
+    </tr>
+    </thead>
+    <tbody>
+    @foreach (var repository in _repositories)
+    {
+        <tr>
+            <td><code>@repository.Owner/@repository.Repo</code></td>
+            <td>@repository.Provider.ToString().ToLowerInvariant()</td>
+            <td>
+                @if (repository.Scopes.Length == 0)
+                {
+                    <span class="empty">none, cannot publish</span>
+                }
+                else
+                {
+                    <span class="muted">@string.Join(", ", repository.Scopes.Select(s => s.ToScopeClaim()))</span>
+                }
+            </td>
+            <td>
+                <EditForm FormName="@($"delete-publisher-{repository.Id}")" Model="_actionModel"
+                          OnValidSubmit="() => DeleteAsync(repository.Id)">
+                    <AntiforgeryToken/>
+                    <button type="submit" class="danger">Revoke</button>
+                </EditForm>
+            </td>
+        </tr>
+    }
+    @if (_repositories.Length == 0)
+    {
+        <tr>
+            <td colspan="4" class="empty">No registered publishers. CI cannot publish anything.</td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<h3>Register or update</h3>
+
+<p class="muted">
+    Owner and repo are matched case-insensitively, the same way the OIDC handler resolves them.
+    Re-registering replaces the scopes, which is how a grant is widened or narrowed.
+</p>
+
+<EditForm FormName="save-publisher" Model="SaveInput!" OnValidSubmit="SaveAsync" class="stack">
+    <AntiforgeryToken/>
+    <label>
+        Provider
+        <InputSelect @bind-Value="SaveInput!.Provider">
+            @foreach (var provider in Providers)
+            {
+                <option value="@provider">@provider.ToString().ToLowerInvariant()</option>
+            }
+        </InputSelect>
+    </label>
+    <label>
+        Owner
+        <InputText @bind-Value="SaveInput!.Owner" placeholder="OpenShock"/>
+    </label>
+    <label>
+        Repository
+        <InputText @bind-Value="SaveInput!.Repo" placeholder="firmware"/>
+    </label>
+    <fieldset>
+        <legend>Scopes</legend>
+        @foreach (var scope in Scopes)
+        {
+            <label class="inline">
+                <input type="checkbox" name="SaveInput.Scopes" value="@scope"
+                       checked="@(SaveInput!.Scopes?.Contains(scope) == true)"/>
+                @scope.ToScopeClaim()
+            </label>
+        }
+    </fieldset>
+    <button type="submit">Save</button>
+</EditForm>
+
+@code {
+    private static readonly RepositoryProvider[] Providers = Enum.GetValues<RepositoryProvider>();
+    private static readonly RepositoryScope[] Scopes = Enum.GetValues<RepositoryScope>();
+
+    private SourceRepository[] _repositories = [];
+    private string? _error;
+    private string? _message;
+
+    // No initializer: the binder assigns this on every post and would overwrite one with null (BL0008).
+    [SupplyParameterFromForm(FormName = "save-publisher")]
+    private PublisherInput? SaveInput { get; set; }
+
+    /// <summary>Satisfies EditForm on the revoke buttons, which carry an id and no fields.</summary>
+    private readonly EmptyInput _actionModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        SaveInput ??= new PublisherInput();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() => _repositories = await PublisherService.ListAsync();
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(SaveInput!.Owner) || string.IsNullOrWhiteSpace(SaveInput.Repo))
+        {
+            Report("Owner and repository are both required.", string.Empty);
+            return;
+        }
+
+        await PublisherService.UpsertAsync(
+            SaveInput.Provider, SaveInput.Owner.Trim(), SaveInput.Repo.Trim(), SaveInput.Scopes?.ToArray() ?? []);
+
+        Report(null, $"Registered {SaveInput.Owner}/{SaveInput.Repo}.");
+        SaveInput = new PublisherInput();
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(Guid repositoryId)
+    {
+        var result = await PublisherService.DeleteAsync(repositoryId);
+
+        Report(
+            result.Match<string?>(
+                _ => null,
+                _ => "That publisher no longer exists.",
+                inUse => $"Cannot remove: {inUse.ReferencedBy} record it as their source. " +
+                         "Clear its scopes instead, which revokes publishing without losing provenance."),
+            "Revoked.");
+
+        await LoadAsync();
+    }
+
+    private void Report(string? error, string success)
+    {
+        _error = error;
+        _message = error is null ? success : null;
+    }
+
+    private sealed class PublisherInput
+    {
+        public RepositoryProvider Provider { get; set; } = RepositoryProvider.Github;
+        public string Owner { get; set; } = string.Empty;
+        public string Repo { get; set; } = string.Empty;
+        public List<RepositoryScope>? Scopes { get; set; }
+    }
+
+    private sealed class EmptyInput;
+}

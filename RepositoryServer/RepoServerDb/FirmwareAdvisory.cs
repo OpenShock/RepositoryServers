@@ -4,7 +4,7 @@ namespace OpenShock.RepositoryServer.RepoServerDb;
 
 /// <summary>
 /// Security / compatibility advisory shown on the firmware manifest endpoint. Managed
-/// via <c>/v2/firmware/admin/advisories</c>. Table: <c>firmware_advisories</c>.
+/// via the admin UI at <c>/admin/firmware/advisories</c>. Table: <c>firmware_advisories</c>.
 /// </summary>
 public class FirmwareAdvisory
 {

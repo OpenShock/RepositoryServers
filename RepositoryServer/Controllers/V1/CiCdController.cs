@@ -17,6 +17,9 @@ namespace OpenShock.RepositoryServer.Controllers.V1;
 [ApiVersion("1.0")]
 [ApiController]
 [Route("/{version:apiVersion}/cicd")]
+// Ingestion is machine-to-machine and authenticated by GitHub OIDC, not something a reader of the
+// API reference can call. Hidden so the published surface is only what consumers actually consume.
+[ApiExplorerSettings(IgnoreApi = true)]
 [Authorize(AuthenticationSchemes = AuthSchemas.CiCdToken, Policy = AuthSchemas.Policies.PublishModules)]
 public class CiCdController : OpenShockControllerBase
 {

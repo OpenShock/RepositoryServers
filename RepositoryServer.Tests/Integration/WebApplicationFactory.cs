@@ -44,16 +44,20 @@ public sealed class WebApplicationFactory
     }
 
     /// <summary>
-    /// Returns an <see cref="HttpClient"/> with a pre-populated <c>Authorization</c>
-    /// header matching the admin token baked into the test configuration.
+    /// Returns an <see cref="HttpClient"/> carrying an admin session, as if the caller had completed
+    /// an Authentik login. Pass <paramref name="group"/> to model an account that is signed in but
+    /// outside the admin group.
     /// </summary>
-    public HttpClient CreateAdminClient()
+    public HttpClient CreateAdminClient(string username = "test-admin", string? group = null)
     {
         var client = CreateClient();
-        // AdminTokenAuthentication compares the raw Authorization header to the configured
-        // admin token — TryAddWithoutValidation bypasses HttpHeaders' scheme+token parser.
         client.DefaultRequestHeaders.TryAddWithoutValidation(
-            TestAdminToken.HeaderName, TestAdminToken.Value);
+            TestAdminAuthHandler.UserHeader, username);
+        if (group is not null)
+        {
+            client.DefaultRequestHeaders.TryAddWithoutValidation(
+                TestAdminAuthHandler.GroupHeader, group);
+        }
         return client;
     }
 
@@ -77,6 +81,47 @@ public sealed class WebApplicationFactory
                 TestCiCdAuthHandler.CommitHashHeader, commitHash);
         }
         return client;
+    }
+
+    /// <summary>
+    /// Resolves a scoped service and runs an operation against it.
+    /// </summary>
+    /// <remarks>
+    /// Administration has no HTTP surface: the management UI calls these services directly, so tests
+    /// exercise the same entry point the UI does rather than a transport in front of it. Annotate the
+    /// lambda parameter to pick the service, e.g.
+    /// <c>Factory.UseAsync((CatalogAdminService s) =&gt; s.ListChipsAsync())</c>.
+    /// </remarks>
+    public async Task<TResult> UseAsync<TService, TResult>(Func<TService, Task<TResult>> operation)
+        where TService : notnull
+    {
+        await using var scope = Services.CreateAsyncScope();
+        return await operation(scope.ServiceProvider.GetRequiredService<TService>());
+    }
+
+    /// <inheritdoc cref="UseAsync{TService,TResult}"/>
+    public async Task UseAsync<TService>(Func<TService, Task> operation)
+        where TService : notnull
+    {
+        await using var scope = Services.CreateAsyncScope();
+        await operation(scope.ServiceProvider.GetRequiredService<TService>());
+    }
+
+    /// <summary>
+    /// Runs an operation against a scoped <see cref="RepoServerContext"/>, for arranging fixtures and
+    /// asserting on what actually reached the database.
+    /// </summary>
+    public async Task<TResult> UseDbAsync<TResult>(Func<RepoServerContext, Task<TResult>> operation)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        return await operation(scope.ServiceProvider.GetRequiredService<RepoServerContext>());
+    }
+
+    /// <inheritdoc cref="UseDbAsync{TResult}"/>
+    public async Task UseDbAsync(Func<RepoServerContext, Task> operation)
+    {
+        await using var scope = Services.CreateAsyncScope();
+        await operation(scope.ServiceProvider.GetRequiredService<RepoServerContext>());
     }
 
     /// <summary>
@@ -134,7 +179,12 @@ public sealed class WebApplicationFactory
             ["Db:SkipMigration"] = "true",
             ["Db:Debug"] = "false",
 
-            ["AdminToken"] = TestAdminToken.Value,
+            // Admin auth is swapped for a test handler below, so these only have to satisfy config
+            // validation. Nothing here is ever contacted: a login is never performed in-process.
+            ["Authentik:Authority"] = "https://authentik.invalid/application/o/repository-server/",
+            ["Authentik:ClientId"] = "repository-server-tests",
+            ["Authentik:ClientSecret"] = "test-client-secret",
+            ["Authentik:AdminGroup"] = TestAdminAuthHandler.AdminGroup,
 
             ["CiCd:Audience"] = "openshock-repository-server-test",
 
@@ -159,9 +209,16 @@ public sealed class WebApplicationFactory
             // type on the existing registration rather than adding a second one.
             services.PostConfigure<AuthenticationOptions>(options =>
             {
-                if (options.SchemeMap.TryGetValue(AuthSchemas.CiCdToken, out var scheme))
+                if (options.SchemeMap.TryGetValue(AuthSchemas.CiCdToken, out var ciCdScheme))
                 {
-                    scheme.HandlerType = typeof(TestCiCdAuthHandler);
+                    ciCdScheme.HandlerType = typeof(TestCiCdAuthHandler);
+                }
+
+                // Same swap for the admin session. The cookie handler itself is not under test; what
+                // matters is that the policy sees the claims a real login would have left behind.
+                if (options.SchemeMap.TryGetValue(AuthSchemas.AdminCookie, out var adminScheme))
+                {
+                    adminScheme.HandlerType = typeof(TestAdminAuthHandler);
                 }
             });
 

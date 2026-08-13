@@ -1,0 +1,11 @@
+@*
+    Pages carry [Authorize(Policy = Admin)] individually rather than relying on an AuthorizeRouteView
+    fallback. Attributes on a routable component become endpoint metadata, so the authorization
+    middleware rejects the request before the router runs, which is what turns an anonymous visit into
+    a redirect to Authentik instead of a rendered "not authorized" page.
+*@
+<Router AppAssembly="@typeof(Program).Assembly" NotFoundPage="@typeof(Pages.PageNotFound)">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(AdminLayout)"/>
+    </Found>
+</Router>

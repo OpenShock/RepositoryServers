@@ -22,6 +22,8 @@ namespace OpenShock.RepositoryServer.Controllers.V2.Firmware;
 [ApiVersion("2.0")]
 [ApiController]
 [Route("/{version:apiVersion}/firmware/releases")]
+// See CiCdController: publishing is a CI-only surface and is kept out of the API reference.
+[ApiExplorerSettings(IgnoreApi = true)]
 [Authorize(AuthenticationSchemes = AuthSchemas.CiCdToken, Policy = AuthSchemas.Policies.PublishFirmware)]
 public class ReleasesController : OpenShockControllerBase
 {

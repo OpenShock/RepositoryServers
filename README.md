@@ -44,7 +44,13 @@ through `appsettings.Custom.json`, user secrets or command line arguments.
 | `OPENSHOCK__DB__CONN`                 | x        |                                      | `Host=postgres-server-host;Port=5432;Database=repo-server;Username=openshock;Password=superSecurePassword` |
 | `OPENSHOCK__DB__SKIPMIGRATION`        |          | `false`                              | `true`, `false`                                                                                            |
 | `OPENSHOCK__DB__DEBUG`                |          | `false`                              | `true`, `false`                                                                                            |
-| `OPENSHOCK__ADMINTOKEN`               | x        |                                      | `superSecureAdminToken`                                                                                    |
+| `OPENSHOCK__AUTHENTIK__AUTHORITY`     | x        |                                      | `https://authentik.example.net/application/o/repository-server/`                                           |
+| `OPENSHOCK__AUTHENTIK__CLIENTID`      | x        |                                      | Client ID of the Authentik OAuth2 provider                                                                 |
+| `OPENSHOCK__AUTHENTIK__CLIENTSECRET`  | x        |                                      | Client secret of the same provider                                                                         |
+| `OPENSHOCK__AUTHENTIK__ADMINGROUP`    | x        |                                      | `openshock-repo-admins`                                                                                    |
+| `OPENSHOCK__AUTHENTIK__SESSIONLIFETIME` |        | `08:00:00`                           | How long an admin session lasts before a fresh login                                                       |
+| `OPENSHOCK__AUTHENTIK__DATAPROTECTIONKEYPATH` |  |                                      | Shared path for cookie encryption keys, required for more than one replica                                 |
+| `OPENSHOCK__AUTHENTIK__REQUIREHTTPSMETADATA` |   | `true`                               | `false` only for local development against an Authentik without TLS                                        |
 | `OPENSHOCK__CICD__AUDIENCE`           | x        | `openshock-repository-server`        | Audience that publishing workflows request their OIDC token for                                            |
 | `OPENSHOCK__FIRMWARE__CDNBASEURL`     | x        | `https://cdn.openshock.app/firmware` | Public base URL firmware artifacts are served from                                                         |
 | `OPENSHOCK__FIRMWARE__STORAGE__TYPE`  | x        | `Local`                              | `Local`, `S3`, `BunnyCdn`                                                                                  |
@@ -108,11 +114,53 @@ networks in `OPENSHOCK__METRICS__ALLOWEDNETWORKS`.
 
 There are two schemes, and they do not overlap.
 
-## Admin token
+## Admin, through Authentik
 
-Every admin endpoint requires the `Authorization` header to equal `OPENSHOCK__ADMINTOKEN` exactly.
-There is no `Bearer` prefix. This covers catalog management, the publish allowlist, Discord webhooks
-and changelog fixes.
+Admin endpoints require a session established by an OpenID Connect login against Authentik. There is
+no static token and no other credential.
+
+```
+GET /auth/login    starts the login, redirects to Authentik
+GET /auth/logout   ends the local session and the Authentik one behind it
+GET /auth/me       reports the current session
+```
+
+The login is an authorization code flow with PKCE. The code is exchanged server-side, so no token
+reaches the browser; what the browser holds is an encrypted session cookie. Group membership is read
+once at login and checked against `OPENSHOCK__AUTHENTIK__ADMINGROUP`. An account outside that group
+is refused at the callback rather than being handed a session that cannot do anything.
+
+Two consequences worth knowing:
+
+- Membership is captured at login, so removing someone from the admin group in Authentik takes effect
+  when their session expires, not immediately. `SESSIONLIFETIME` bounds that window.
+- The provider must be configured to emit a `groups` claim. Without it every login is rejected, since
+  nothing can satisfy the policy.
+
+Authentik setup: create an OAuth2/OpenID provider with a confidential client, redirect URI
+`https://your-server/auth/callback`, and a scope mapping that emits `groups`. Point an application at
+it and bind the admin group.
+
+### Admin UI
+
+Administration is the UI at `/admin`. There are no admin endpoints: the pages call the admin services
+directly, so there is no second surface to keep in step. The pages are rendered server-side with no
+client-side framework and no JavaScript, and each carries the admin policy as endpoint metadata, so an
+unauthenticated visitor is redirected to Authentik before any markup is produced.
+
+It is grouped as shared, firmware and desktop:
+
+| Page | Group |
+|------|-------|
+| `/admin` | Status across both domains |
+| `/admin/repositories` | Publish allowlist, shared by firmware and desktop |
+| `/admin/discord-webhooks` | Notification targets, shared |
+| `/admin/firmware/releases` | Changelog fixes and unpublishing versions |
+| `/admin/firmware/boards`, `/chips`, `/usb-devices`, `/usb-serial-filters`, `/advisories` | The firmware catalog |
+| `/admin/desktop/modules` | Desktop modules and their versions |
+
+If a machine-readable admin surface is needed later, it will be a separate automation API with its own
+tokens, built on the same services.
 
 ## GitHub OIDC
 
@@ -151,8 +199,6 @@ steps:
 | `GET /2/firmware/versions/{version}[/{board}]`      | none  | A specific published version                                       |
 | `GET /2/firmware/boards`, `GET /2/firmware/chips`   | none  | Catalog listings                                                   |
 | `/2/firmware/releases/...`                          | OIDC  | Release ingestion                                                  |
-| `/2/firmware/admin/...`                             | admin | Boards, chips, USB devices, serial filters, advisories, allowlist  |
-| `/2/admin/discord-webhooks`                         | admin | Notification webhooks                                              |
 
 Channels cascade, `stable` is visible to `beta`, and both are visible to `develop`, so a stable
 release is also the newest thing a beta hub should be offered. Boards are addressed by name, the
@@ -164,7 +210,6 @@ PlatformIO env name a hub compiles in as `OPENSHOCK_FW_BOARD`. Board UUIDs are s
 |----------------------------------------------|-------|---------------------------------------------|
 | `GET /1/`                                    | none  | Repository index with every module version  |
 | `PUT /1/cicd/modules/{id}/versions/{version}` | OIDC | Upload a module zip                         |
-| `/1/admin/modules/...`                       | admin | Create and delete modules and versions      |
 
 ## Release workflow
 
@@ -208,33 +253,57 @@ unless `OPENSHOCK__DB__SKIPMIGRATION` is set, so do not run them by hand.
 ## Seeding a fresh instance
 
 A new database has no chips and no boards, and release init rejects a board it does not know, so the
-first CI publish will fail until the catalog exists.
+first CI publish will fail until the catalog exists. Three things have to be created, in this order,
+by an administrator signed in at `/auth/login`:
 
-```bash
-REPO_SERVER_URL=https://repo.my-openshock-instance.net \
-ADMIN_TOKEN=superSecureAdminToken \
-PUBLISH_OWNER=OpenShock PUBLISH_REPO=firmware \
-./scripts/seed-catalog.sh
-```
+1. **Chips**, at `/admin/firmware/chips`. Names must match esptool-js chip identifiers exactly
+   (`ESP32`, `ESP32-S2`, `ESP32-S3`, `ESP32-C3`), since the web flashtool passes them straight
+   through. Architecture is `xtensa` for the ESP32/S2/S3 family and `riscv` for the C3.
+2. **Boards**, at `/admin/firmware/boards`, each referencing a chip. A board's name has to match its
+   `[env:...]` name in the firmware repository's `platformio.ini` exactly, because that is what a hub
+   compiles in as `OPENSHOCK_FW_BOARD` and reports as its own board. Required artifacts are normally
+   app and staticfs, the two an OTA update must supply.
+3. **Publishers**, at `/admin/repositories`, one per repository allowed to publish, with the scopes it
+   is granted. A repository registered with no scopes cannot publish anything.
 
-Every call the script makes is idempotent, so re-running it after adding a board is safe. Board names
-have to match the `[env:...]` names in the firmware repository's `platformio.ini` exactly, because
-that is what a hub reports as its own board. `PUBLISH_SCOPES` defaults to `publish_firmware`, use
-`publish_modules` for a desktop module repository, or both comma separated.
+`/admin` shows whether any of these are still missing.
 
 # Development
 
-Requires the .NET SDK version pinned in `global.json` and a Postgres instance.
+Requires the .NET SDK version pinned in `global.json` and a Postgres instance. Two commands:
 
 ```bash
-docker run -d --name repo-server-pg -p 5432:5432 \
+docker run -d --name repo-server-pg -p 5433:5432 \
   -e POSTGRES_DB=repo-server -e POSTGRES_USER=openshock -e POSTGRES_PASSWORD=openshock \
   postgres:17-alpine
 
 dotnet run --project RepositoryServer
 ```
 
-The Development profile listens on `http://*:5080`.
+The Development profile listens on `http://localhost:5080`, applies migrations on startup, and prints
+a banner confirming the Authentik bypass. Port 5433 keeps this out of the way of a local OpenShock API
+stack, which uses 5432.
+
+| URL | What it is |
+|-----|------------|
+| `http://localhost:5080/admin` | Admin UI |
+| `http://localhost:5080/auth/me` | Current session, useful for checking the bypass took |
+| `http://localhost:5080/scalar` | API reference |
+
+## Authentik bypass
+
+`appsettings.Development.json` sets `DevAuth:BypassAuthentik`, which replaces the Authentik login with
+a handler that treats every caller as an administrator, so local work needs no identity provider at
+all. Set it to `false` to exercise the real login against an Authentik instance.
+
+Three separate things have to line up for it to do anything:
+
+1. The code is inside `#if DEBUG`, so a Release build does not contain the handler
+2. The environment must be `Development`
+3. The flag must be set
+
+The published image is built with `-c Release`, so the bypass is not in it. That is a stronger
+guarantee than a runtime check on an environment variable somebody could set by mistake.
 
 ## Tests
 

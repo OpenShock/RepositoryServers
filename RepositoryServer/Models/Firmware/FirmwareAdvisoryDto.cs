@@ -2,7 +2,7 @@ namespace OpenShock.RepositoryServer.Models.Firmware;
 
 /// <summary>
 /// Security / compatibility advisory exposed on the manifest endpoint. Served from the
-/// <c>firmware_advisories</c> table; managed via <c>/v2/firmware/admin/advisories</c>.
+/// <c>firmware_advisories</c> table; managed in the admin UI at <c>/admin/firmware/advisories</c>.
 /// </summary>
 public sealed record FirmwareAdvisoryDto
 {

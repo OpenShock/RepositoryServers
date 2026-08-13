@@ -1,0 +1,141 @@
+@page "/admin/firmware/usb-serial-filters"
+@attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
+@inject CatalogAdminService Catalog
+
+<h2>USB serial filters</h2>
+
+<p class="muted">
+    WebSerial port picker rules. Leaving the PID empty matches an entire vendor, and there can only be
+    one vendor-wide row per VID.
+</p>
+
+<StatusAlert Error="@_error" Message="@_message"/>
+
+<table>
+    <thead>
+    <tr>
+        <th>VID</th>
+        <th>PID</th>
+        <th>Description</th>
+        <th></th>
+    </tr>
+    </thead>
+    <tbody>
+    @foreach (var filter in _filters)
+    {
+        <tr>
+            <td><code>@Hex(filter.Vid)</code></td>
+            <td>@(filter.Pid is { } pid ? Hex(pid) : "any")</td>
+            <td>@(filter.Description ?? "")</td>
+            <td>
+                <EditForm FormName="@($"delete-filter-{filter.Id}")" Model="_deleteModel"
+                          OnValidSubmit="() => DeleteAsync(filter.Id)">
+                    <AntiforgeryToken/>
+                    <button type="submit" class="danger">Delete</button>
+                </EditForm>
+            </td>
+        </tr>
+    }
+    @if (_filters.Length == 0)
+    {
+        <tr>
+            <td colspan="4" class="empty">No filters.</td>
+        </tr>
+    }
+    </tbody>
+</table>
+
+<h3>Add or update</h3>
+
+<EditForm FormName="upsert-filter" Model="UpsertInput!" OnValidSubmit="UpsertAsync" class="stack">
+    <AntiforgeryToken/>
+    <label>
+        VID
+        <InputText @bind-Value="UpsertInput!.Vid" placeholder="0x1A86"/>
+    </label>
+    <label>
+        PID <span class="muted">(empty matches the whole vendor)</span>
+        <InputText @bind-Value="UpsertInput!.Pid" placeholder="0x7522"/>
+    </label>
+    <label>
+        Description
+        <InputText @bind-Value="UpsertInput!.Description" placeholder="QinHeng CH340"/>
+    </label>
+    <button type="submit">Save</button>
+</EditForm>
+
+@code {
+    private UsbSerialFilter[] _filters = [];
+    private string? _error;
+    private string? _message;
+
+    // No initializer: the binder assigns this on every post and would overwrite one with null (BL0008).
+    [SupplyParameterFromForm]
+    private FilterInput? UpsertInput { get; set; }
+
+    /// <summary>Satisfies EditForm on the delete buttons, which carry an id and no fields.</summary>
+    private readonly EmptyInput _deleteModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        UpsertInput ??= new FilterInput();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync() => _filters = await Catalog.ListUsbSerialFiltersAsync();
+
+    private static string Hex(int value) => $"0x{value:X4}";
+
+    private async Task UpsertAsync()
+    {
+        if (!UsbIdentifier.TryParse(UpsertInput!.Vid, out var vid))
+        {
+            Report("VID and PID must be numbers, in hex (0x1A86) or decimal.", string.Empty);
+            return;
+        }
+
+        int? pid = null;
+        if (!string.IsNullOrWhiteSpace(UpsertInput.Pid))
+        {
+            if (!UsbIdentifier.TryParse(UpsertInput.Pid, out var parsedPid))
+            {
+                Report("VID and PID must be numbers, in hex (0x1A86) or decimal.", string.Empty);
+                return;
+            }
+            pid = parsedPid;
+        }
+
+        var description = string.IsNullOrWhiteSpace(UpsertInput.Description) ? null : UpsertInput.Description;
+        await Catalog.UpsertUsbSerialFilterAsync(vid, pid, description);
+        Report(null, "Saved.");
+        UpsertInput = new FilterInput();
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(Guid id)
+    {
+        var result = await Catalog.DeleteUsbSerialFilterAsync(id);
+
+        Report(
+            result.Match<string?>(
+                _ => null,
+                _ => "That filter no longer exists."),
+            "Deleted.");
+        await LoadAsync();
+    }
+
+    private void Report(string? error, string success)
+    {
+        _error = error;
+        _message = error is null ? success : null;
+    }
+
+    private sealed class FilterInput
+    {
+        public string Vid { get; set; } = string.Empty;
+        public string? Pid { get; set; }
+        public string? Description { get; set; }
+    }
+
+    private sealed class EmptyInput;
+}

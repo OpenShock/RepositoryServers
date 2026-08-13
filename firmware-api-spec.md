@@ -922,307 +922,47 @@ A background job automatically aborts and cleans up staging releases that have b
 
 ---
 
-## 6. Admin Endpoints
-
-All admin endpoints require `AdminToken` authentication.
-
-### 6.1. Repositories
-
-> **Note**: Although scoped under `/2/firmware/admin/`, the `repositories` table is shared infrastructure. Repositories registered here are available for source traceability in both firmware versions and desktop module versions. See the `Repository` type in section 3.
-
-#### Upsert repository
-
-```
-PUT /2/firmware/admin/repositories
-```
-
-```jsonc
-{
-  "provider": "github",
-  "owner": "openshock",
-  "repo": "firmware",
-  "scopes": ["publish_firmware"]     // publish_firmware | publish_modules
-}
-```
-
-Registers a repository. `provider`, `owner` and `repo` are matched **case-insensitively** — GitHub
-treats owner and repo names that way, and the casing in an OIDC token follows whatever the repository
-is currently called, so an exact match would let a cosmetic rename silently de-authorize it. Scopes are
-authoritative on re-registration: re-running onboarding with a different set widens or narrows the
-grant. Omitting them registers the repository without letting it publish anything. Unique constraint on `(provider, owner, repo)`; idempotent, so re-running
-onboarding is harmless.
-
-**This is the publish allowlist, not a bookkeeping table.** A GitHub OIDC token proves only that some
-workflow somewhere on GitHub requested it — the issuer is shared by every repository, and the audience
-is a plain string any workflow can ask for by name. Registration here is therefore the actual
-authorization decision (§5.1), and deletion is a real revocation.
-
-**201 Created** → `Repository` (newly registered)
-
-**200 OK** → `Repository` (already registered)
-
-```jsonc
-{
-  "id": "a3f1b2c4-5d6e-7f8a-9b0c-1d2e3f4a5b6c",
-  "provider": "github",
-  "owner": "openshock",
-  "repo": "firmware"
-}
-```
-
-#### List repositories
-
-```
-GET /2/firmware/admin/repositories
-```
-
-**200 OK** → `Repository[]`
-
-#### Delete repository
-
-```
-DELETE /2/firmware/admin/repositories/{repositoryId}
-```
-
-Fails if any firmware versions reference this repository.
-
-**204 No Content** → deleted
-
-**409 Conflict** → repository is in use by firmware versions
-
-### 6.2. Boards
-
-#### Upsert board
-
-```
-PUT /2/firmware/admin/boards/{boardId}
-```
-
-```jsonc
-{
-  "name": "OpenShock Core V1",
-  "chipId": "esp32s3",
-  "requiredArtifactTypes": ["merged"]
-}
-```
-
-**201 Created**
-
-#### Discontinue board
-
-```
-PATCH /2/firmware/admin/boards/{boardId}/discontinue
-```
-
-**200 OK**
-
-#### Delete board
-
-```
-DELETE /2/firmware/admin/boards/{boardId}
-```
-
-Fails if any firmware artifacts reference this board.
-
-**204 No Content** or **409 Conflict**
-
-### 6.3. Chips
-
-#### Upsert chip
-
-```
-PUT /2/firmware/admin/chips/{chipId}
-```
-
-```jsonc
-{
-  "name": "ESP32-S3",
-  "architecture": "xtensa"
-}
-```
-
-**201 Created**
-
-#### Delete chip
-
-```
-DELETE /2/firmware/admin/chips/{chipId}
-```
-
-Fails if any boards reference this chip.
-
-**204 No Content** or **409 Conflict**
-
-### 6.4. Versions
-
-#### Delete version
-
-```
-DELETE /2/firmware/admin/versions/{version}
-```
-
-Deletes a firmware version and all its artifacts and release notes (cascade).
-
-**204 No Content** or **404 Not Found**
-
-### 6.5. Release Changelog
-
-#### Fix changelog
-
-```
-PUT /2/firmware/admin/releases/{releaseId}/changelog
-```
-
-```jsonc
-{
-  "changelog": "### Info\n- Fixed WiFi reconnection\n- Improved battery life"
-}
-```
-
-Allows repo janitors to fix or refine release notes on a staging release. Typically used for releases created with `?nofail` (status = `editing`), but also works on `staging` releases to restructure notes before publish.
-
-**Behavior**:
-1. Validates the release exists and is in `staging` or `editing` status
-2. Parses the submitted changelog strictly (same rules as section 5.3 — no `?nofail` bypass here)
-3. If valid: replaces all staged release notes, sets status to `staging` (if it was `editing`), returns **200 OK**
-4. If the changelog is invalid: returns **400** (`firmware/invalid-changelog`)
-5. If the release is not in `staging` or `editing` status: returns **409 Conflict**
-
-### 6.6. USB Serial Filters
-
-Broad WebSerial selectors consumed by the `usbSerialFilters` field in the manifest. Either vendor-wide (omit `pid`) or specific (provide both).
-
-#### Upsert filter
-
-```
-PUT /2/firmware/admin/usb-serial-filters
-```
-
-Vendor-wide:
-
-```jsonc
-{
-  "vid": 6790,
-  "description": "WCH — vendor-wide (CH340, CH9102, CH343, ...)"
-}
-```
-
-Specific:
-
-```jsonc
-{
-  "vid": 12346,
-  "pid": 4097,
-  "description": "ESP32-S3 native USB-JTAG"
-}
-```
-
-Unique constraint on `(vid, pid)` with NULLs treated as equal — at most one vendor-wide row per VID. `description` is admin-only and never surfaced in the public manifest.
-
-**201 Created**
-
-```jsonc
-{
-  "id": "<guid>",
-  "vid": 12346,
-  "pid": 4097,
-  "description": "ESP32-S3 native USB-JTAG"
-}
-```
-
-#### List filters
-
-```
-GET /2/firmware/admin/usb-serial-filters
-```
-
-**200 OK** → array of filter rules (admin shape — includes `description`).
-
-#### Delete filter
-
-```
-DELETE /2/firmware/admin/usb-serial-filters/{id}
-```
-
-**204 No Content**
-
-### 6.7. USB Devices
-
-Recognition catalog entries — specific `(vid, pid)` pairs with a human-readable name. Consumed by the manifest `usbDevices` list and by each board's inline `usbDevices` array. Boards and chips attach to catalog entries via junction tables.
-
-#### Upsert USB device
-
-```
-PUT /2/firmware/admin/usb-devices
-```
-
-```jsonc
-{
-  "vid": 6790,
-  "pid": 29970,
-  "name": "CH9102"
-}
-```
-
-Unique constraint on `(vid, pid)`. If the pair already exists, this updates `name` in place.
-
-**201 Created** → `FirmwareUsbDevice` with server-assigned `id`.
-
-#### List USB devices
-
-```
-GET /2/firmware/admin/usb-devices
-```
-
-**200 OK** → `FirmwareUsbDevice[]`.
-
-#### Delete USB device
-
-```
-DELETE /2/firmware/admin/usb-devices/{id}
-```
-
-Fails if the device is still linked to any chip or board — detach first.
-
-**204 No Content** → deleted
-
-**409 Conflict** → still referenced by `firmware_chip_usb_devices` or `firmware_board_usb_devices`
-
-#### Attach USB device to board
-
-```
-PUT /2/firmware/admin/boards/{boardId}/usb-devices/{usbDeviceId}
-```
-
-Creates a link in `firmware_board_usb_devices`. Idempotent.
-
-**204 No Content**
-
-#### Detach USB device from board
-
-```
-DELETE /2/firmware/admin/boards/{boardId}/usb-devices/{usbDeviceId}
-```
-
-**204 No Content**
-
-#### Attach USB device to chip
-
-```
-PUT /2/firmware/admin/chips/{chipId}/usb-devices/{usbDeviceId}
-```
-
-Creates a link in `firmware_chip_usb_devices`. Typically used for native-USB catalog entries (ESP32-S3 USB-JTAG, ESP32-C3 USB-JTAG, etc.). Idempotent.
-
-**204 No Content**
-
-#### Detach USB device from chip
-
-```
-DELETE /2/firmware/admin/chips/{chipId}/usb-devices/{usbDeviceId}
-```
-
-**204 No Content**
+## 6. Administration
+
+**There are no admin endpoints.** Administration is the management UI at `/admin`, served by the
+repository server itself and rendered on the server, so an unauthenticated visitor is turned away
+before any markup is produced. Access requires an Authentik session in the configured admin group; see
+the README for the login flow.
+
+The UI covers:
+
+The UI is grouped as shared, firmware and desktop. Publishers and Discord webhooks are shared because
+both domains use them: the `repositories` table is the publish allowlist for firmware and desktop
+alike, and both notify through the same webhooks.
+
+| Page | Group | What it manages |
+|------|-------|-----------------|
+| `/admin` | shared | Status across both domains, including releases waiting on a changelog fix |
+| `/admin/repositories` | shared | The publish allowlist and its scopes |
+| `/admin/discord-webhooks` | shared | Notification targets |
+| `/admin/firmware/releases` | firmware | Fixing changelogs on staged releases, unpublishing versions |
+| `/admin/firmware/boards` | firmware | Boards, their chip, required artifact types, discontinuation, USB devices |
+| `/admin/firmware/chips` | firmware | Chips and their native USB devices |
+| `/admin/firmware/usb-devices` | firmware | The VID/PID recognition catalog |
+| `/admin/firmware/usb-serial-filters` | firmware | WebSerial port picker rules |
+| `/admin/firmware/advisories` | firmware | Advisories served on the manifest |
+| `/admin/desktop/modules` | desktop | Desktop modules, their owning repository, and published versions |
+
+The rules these enforce are unchanged, and live in the admin services rather than in controllers:
+
+- A chip cannot be deleted while a board references it; a board cannot be deleted while it has
+  published artifacts; a USB device cannot be deleted while a chip or board links to it.
+- A repository cannot be deleted while a version or release records it as their source. Revoking a
+  publisher that has already published means clearing its scopes, which keeps provenance intact.
+- Board names are restricted to `^[A-Za-z0-9][A-Za-z0-9._-]*$` and are unique case-insensitively,
+  because the name is a path segment in artifact URLs and storage keys.
+- Registering a repository is idempotent on `(provider, owner, repo)` matched case-insensitively, and
+  scopes are authoritative on re-registration.
+- A changelog fix re-parses the markdown and returns the release to `staging`, which is the only
+  status publish accepts.
+
+If a machine-readable admin surface is needed later, it will be a separate automation API with its own
+tokens, built on the same services rather than beside them.
 
 ---
 
@@ -1406,7 +1146,7 @@ This affects both firmware and desktop module releases. The `archived` status is
 | `FirmwareManifestResponse` | Split `usbDevices` → `usbSerialFilters` + `usbDevices`; both queried from DB | DTO + controller |
 | `FirmwareBoardDto` | Add inline `usbDevices: FirmwareUsbDevice[]` array (board-specific only) joined via `firmware_board_usb_devices` | DTO + controller |
 | `FirmwareChipDto` | Add inline `usbDevices: FirmwareUsbDevice[]` array (chip-level native USB modes) joined via `firmware_chip_usb_devices` | DTO + controller |
-| New admin USB endpoints | `PUT`/`GET`/`DELETE /2/firmware/admin/usb-serial-filters` and `/usb-devices`, plus board/chip attach/detach under `/boards/{id}/usb-devices/{id}` and `/chips/{id}/usb-devices/{id}` | New controller |
+| USB catalog administration | Serial filters, USB devices, and board/chip attachment | Admin UI, see section 6 |
 | Seed migration | Insert initial filter rows (WCH vendor-wide, SiLabs vendor-wide, Espressif S2/S3/C3 native-USB PIDs) and device catalog rows (CH340, CH9102, CP2102/04/05, FT232, ESP32-S2/S3/C3 USB-JTAG) | DB + migration |
 | `FirmwareLatestResponse` | Replace with `FirmwareRelease`: add `source` (structured), `releaseNotes`, reshape `artifacts` → `boards` with chip/discontinued | DTO + controller |
 | `LatestController` | Join Board→Chip, include ReleaseNotes, build new response shape | Controller |
@@ -1435,7 +1175,7 @@ This affects both firmware and desktop module releases. The `archived` status is
 | `ReleaseStatus.Editing` | New status for releases whose notes need manual review/refinement before publish | Enum value |
 | Changelog parser validation | Strict validation with `?nofail` bypass. Invalid changelog → 400 or status = `editing` | New utility logic |
 | `PublishRelease` status gate | Reject publish when status is `editing` (409) | Controller |
-| Admin changelog endpoint | `PUT /admin/releases/{releaseId}/changelog` — fix malformed changelogs on staging releases | New controller action |
+| Changelog repair | Fix malformed changelogs on staged releases | Admin UI, see section 6 |
 | SHA-256 manifest on upload | `sha256` form field required on `UploadBoardArtifacts`, server validates hashes | Controller |
 | Staged release cleanup job | Background job aborts expired releases (1h staging, 7d editing) | New hosted service |
 | DELETE → 204 | All DELETE endpoints return 204 No Content instead of 200 | Controllers |
