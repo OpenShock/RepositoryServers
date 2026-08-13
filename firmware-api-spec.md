@@ -646,6 +646,15 @@ Authorization: Bearer <github-oidc-jwt>
 
 On successful auth, the matched `repository_id` and extracted claims (`sha`, `ref`, `run_id`) are attached to the request context for use by the release endpoints.
 
+**Per-release ownership**: authentication identifies *a* registered repository, not *which* release it
+may act on. Every registered repository presents an equally valid principal, so `InitRelease` records
+the caller's `repository_id` on the release, and upload, publish and abort each re-check it and return
+**403** on mismatch. Without that check any registered repository could inject artifacts into another's
+in-flight release, publish it under that repository's identity and commit hash, or abort it.
+
+The same rule applies to desktop module ingestion: a module carries an owning `repository_id`, and a
+module with no owner assigned is closed to every publisher rather than open to any.
+
 **Server config** (appsettings — only the OIDC audience, not the repo list):
 
 ```jsonc
@@ -892,9 +901,17 @@ PUT /2/firmware/admin/repositories
 }
 ```
 
-Creates or updates a repository entry. Unique constraint on `(provider, owner, repo)` — if it already exists, this is a no-op.
+Registers a repository. Unique constraint on `(provider, owner, repo)`; idempotent, so re-running
+onboarding is harmless.
 
-**201 Created** → `Repository`
+**This is the publish allowlist, not a bookkeeping table.** A GitHub OIDC token proves only that some
+workflow somewhere on GitHub requested it — the issuer is shared by every repository, and the audience
+is a plain string any workflow can ask for by name. Registration here is therefore the actual
+authorization decision (§5.1), and deletion is a real revocation.
+
+**201 Created** → `Repository` (newly registered)
+
+**200 OK** → `Repository` (already registered)
 
 ```jsonc
 {

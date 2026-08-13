@@ -13,10 +13,18 @@ namespace OpenShock.RepositoryServer.AuthenticationHandlers;
 /// cryptography; this class adds an <see cref="JwtBearerEvents.OnTokenValidated"/>
 /// hook that:
 ///   1. Extracts owner/repo/commit/ref/run_id from the token claims.
-///   2. Looks up or auto-inserts the <c>repositories</c> row for this owner/repo pair.
+///   2. Looks up the <c>repositories</c> row for this owner/repo pair, failing if absent.
 ///   3. Attaches <see cref="AuthSchemas.CiCdClaims"/> to the principal so controllers
 ///      can pull the matched repository id, commit SHA, ref, and run id.
 /// </summary>
+/// <remarks>
+/// A valid GitHub OIDC token proves only that <em>some</em> GitHub Actions workflow requested it. The
+/// issuer is shared by every repository on GitHub, and the audience is a plain string that any workflow
+/// can ask for by name, so neither authenticates <em>which</em> repository is calling. Registration in
+/// the <c>repositories</c> table is therefore the actual authorization decision: an unregistered
+/// repository is rejected here rather than being registered on the spot. Onboarding is an explicit
+/// admin action — see <c>PUT /v2/firmware/admin/repositories</c>.
+/// </remarks>
 public static class GitHubOidcAuthentication
 {
     public const string Issuer = "https://token.actions.githubusercontent.com";
@@ -73,7 +81,13 @@ public static class GitHubOidcAuthentication
             .GetRequiredService<IDbContextFactory<RepoServerContext>>();
         await using var db = await dbFactory.CreateDbContextAsync(context.HttpContext.RequestAborted);
 
-        var repositoryId = await GetOrCreateRepositoryAsync(db, owner, repo, context.HttpContext.RequestAborted);
+        var repositoryId = await FindRepositoryAsync(db, owner, repo, context.HttpContext.RequestAborted);
+        if (repositoryId is null)
+        {
+            // Deliberately does not disclose whether the repository is merely unregistered.
+            context.Fail("Repository is not authorized to publish.");
+            return;
+        }
 
         var identity = (ClaimsIdentity)principal.Identity!;
         identity.AddClaim(new Claim(AuthSchemas.CiCdClaims.RepositoryId, repositoryId.ToString()));
@@ -84,52 +98,18 @@ public static class GitHubOidcAuthentication
             identity.AddClaim(new Claim(AuthSchemas.CiCdClaims.RunId, runId));
     }
 
-    private static async Task<Guid> GetOrCreateRepositoryAsync(RepoServerContext db, string owner, string repo, CancellationToken ct)
+    /// <summary>
+    /// Resolves a pre-registered repository. Returns <c>null</c> when the pair is not registered —
+    /// never creates the row, since that would make the allowlist self-populating and authorize
+    /// whoever showed up first.
+    /// </summary>
+    private static async Task<Guid?> FindRepositoryAsync(RepoServerContext db, string owner, string repo, CancellationToken ct)
     {
         const RepositoryProvider provider = RepositoryProvider.Github;
 
-        var existing = await db.Repositories
+        return await db.Repositories
             .Where(r => r.Provider == provider && r.Owner == owner && r.Repo == repo)
             .Select(r => (Guid?)r.Id)
             .FirstOrDefaultAsync(ct);
-
-        if (existing is not null)
-        {
-            return existing.Value;
-        }
-
-        var row = new SourceRepository
-        {
-            Id = Guid.NewGuid(),
-            Provider = provider,
-            Owner = owner,
-            Repo = repo
-        };
-
-        db.Repositories.Add(row);
-
-        try
-        {
-            await db.SaveChangesAsync(ct);
-            return row.Id;
-        }
-        catch (DbUpdateException)
-        {
-            // Race: another concurrent token validation inserted the same (provider, owner, repo).
-            // Re-read and return.
-            db.Entry(row).State = EntityState.Detached;
-
-            var raced = await db.Repositories
-                .Where(r => r.Provider == provider && r.Owner == owner && r.Repo == repo)
-                .Select(r => (Guid?)r.Id)
-                .FirstOrDefaultAsync(ct);
-
-            if (raced is null)
-            {
-                throw;
-            }
-
-            return raced.Value;
-        }
     }
 }

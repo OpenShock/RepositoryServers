@@ -78,6 +78,14 @@ public class ReleasesController : OpenShockControllerBase
             return Problem(FirmwareError.FirmwareReleaseBoardsEmpty);
         }
 
+        // Published versions are immutable (spec §4.4). Without this, re-initialising an existing
+        // version would let a second release overwrite live artifacts at the same storage keys before
+        // any publish call, and an abandoned one would later have them deleted by the TTL job.
+        if (await _db.FirmwareVersions.AnyAsync(v => v.Version == request.Version, ct))
+        {
+            return Problem(FirmwareError.FirmwareVersionAlreadyPublished);
+        }
+
         var existingStaging = await _db.FirmwareReleases
             .AnyAsync(r => r.Version == request.Version &&
                            (r.Status == ReleaseStatus.Staging || r.Status == ReleaseStatus.Editing),
@@ -178,6 +186,11 @@ public class ReleasesController : OpenShockControllerBase
         if (release is null)
         {
             return Problem(FirmwareError.FirmwareReleaseNotFound);
+        }
+
+        if (!IsOwnedByCaller(release))
+        {
+            return Problem(FirmwareError.FirmwareReleaseNotOwned);
         }
 
         if (release.Status != ReleaseStatus.Staging && release.Status != ReleaseStatus.Editing)
@@ -342,6 +355,11 @@ public class ReleasesController : OpenShockControllerBase
             return Problem(FirmwareError.FirmwareReleaseNotFound);
         }
 
+        if (!IsOwnedByCaller(release))
+        {
+            return Problem(FirmwareError.FirmwareReleaseNotOwned);
+        }
+
         if (release.Status == ReleaseStatus.Editing)
         {
             return Problem(FirmwareError.FirmwareReleaseNotesNotFinalized);
@@ -457,6 +475,11 @@ public class ReleasesController : OpenShockControllerBase
             return Problem(FirmwareError.FirmwareReleaseNotFound);
         }
 
+        if (!IsOwnedByCaller(release))
+        {
+            return Problem(FirmwareError.FirmwareReleaseNotOwned);
+        }
+
         if (release.Status != ReleaseStatus.Staging && release.Status != ReleaseStatus.Editing)
         {
             return Problem(FirmwareError.FirmwareReleaseNotEditable);
@@ -477,6 +500,22 @@ public class ReleasesController : OpenShockControllerBase
     // ---- Helpers ----
 
     private readonly record struct SourceClaims(Guid RepositoryId, string CommitHash, string? Ref, string? RunId);
+
+    /// <summary>
+    /// Confirms the authenticated repository is the one that created this release.
+    /// </summary>
+    /// <remarks>
+    /// Every registered repository presents an equally valid CI/CD principal, so authentication alone
+    /// says nothing about <em>which</em> release the caller may touch. Without this check any
+    /// authorized repository could inject binaries into another's in-flight release, publish it under
+    /// that repository's identity and commit hash, or abort it.
+    /// </remarks>
+    private bool IsOwnedByCaller(FirmwareRelease release)
+    {
+        var rawRepoId = User.FindFirstValue(AuthSchemas.CiCdClaims.RepositoryId);
+        return Guid.TryParse(rawRepoId, out var callerRepositoryId)
+               && release.RepositoryId == callerRepositoryId;
+    }
 
     private bool TryReadSourceClaims(out SourceClaims claims, out string missing)
     {

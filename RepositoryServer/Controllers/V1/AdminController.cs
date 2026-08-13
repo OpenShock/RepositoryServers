@@ -27,13 +27,20 @@ public class AdminController : OpenShockControllerBase
     [HttpPut("modules/{moduleId}")]
     public async Task<IActionResult> CreateModule([FromBody] CreateModuleRequest createModuleRequest, [FromRoute] string moduleId)
     {
+        if (createModuleRequest.RepositoryId is { } repositoryId &&
+            !await _db.Repositories.AnyAsync(r => r.Id == repositoryId))
+        {
+            return Problem(FirmwareError.FirmwareRepositoryNotFound);
+        }
+
         var module = new Module
         {
             Id = moduleId.ToLowerInvariant(),
             Name = createModuleRequest.Name,
             Description = createModuleRequest.Description,
             SourceUrl = createModuleRequest.SourceUrl,
-            IconUrl = createModuleRequest.IconUrl
+            IconUrl = createModuleRequest.IconUrl,
+            RepositoryId = createModuleRequest.RepositoryId
         };
         var executed = await _db.Modules.Upsert(module).On(x => x.Id).RunAsync();
 

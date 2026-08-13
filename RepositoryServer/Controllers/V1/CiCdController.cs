@@ -1,4 +1,5 @@
 using System.IO.Compression;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
@@ -51,9 +52,29 @@ public class CiCdController : OpenShockControllerBase
             return Problem(VersionError.VersionInvalidSemver);
         }
 
-        if (!await _db.Modules.AnyAsync(x => x.Id == moduleId))
+        var module = await _db.Modules.FirstOrDefaultAsync(x => x.Id == moduleId);
+        if (module is null)
         {
             return Problem(ModuleError.ModuleNotFound);
+        }
+
+        // Every registered repository presents an equally valid CI/CD principal, so authentication
+        // alone does not say which module the caller may publish to. Unassigned modules are closed to
+        // all publishers rather than open to any.
+        var rawRepoId = User.FindFirstValue(AuthSchemas.CiCdClaims.RepositoryId);
+        if (module.RepositoryId is not { } owningRepositoryId
+            || !Guid.TryParse(rawRepoId, out var callerRepositoryId)
+            || owningRepositoryId != callerRepositoryId)
+        {
+            return Problem(ModuleError.ModuleNotOwned);
+        }
+
+        // Published versions are immutable. The upsert below is keyed on (module, version), so without
+        // this an existing version's zip URL and hash would be silently replaced in place — and
+        // integrity checks would then pass against the replacement.
+        if (await _db.Versions.AnyAsync(v => v.Module == moduleId && v.VersionName == moduleVersion))
+        {
+            return Problem(VersionError.VersionAlreadyExists);
         }
 
         var file = Request.Form.Files.GetFile("zip");

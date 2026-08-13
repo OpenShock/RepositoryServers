@@ -70,7 +70,13 @@ public sealed class StagedReleaseCleanupService : BackgroundService
         }
     }
 
-    private async Task TickAsync(CancellationToken ct)
+    /// <summary>
+    /// Runs a single cleanup pass. Internal rather than private so tests can drive it deterministically:
+    /// <see cref="BackgroundService.StartAsync"/> returns at the first await inside
+    /// <see cref="ExecuteAsync"/>, so a test that started and stopped the service would race the very
+    /// tick it means to observe.
+    /// </summary>
+    internal async Task TickAsync(CancellationToken ct)
     {
         var now = _timeProvider.GetUtcNow();
         var stagedDeadline = now - _apiConfig.Firmware.StagedReleaseTtl;

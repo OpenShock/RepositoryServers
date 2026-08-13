@@ -1,0 +1,414 @@
+using System.Net;
+using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using OpenShock.RepositoryServer.Enums;
+using OpenShock.RepositoryServer.Models.Firmware;
+using OpenShock.RepositoryServer.RepoServerDb;
+
+namespace OpenShock.RepositoryServer.Tests.Integration.Tests;
+
+/// <summary>
+/// Covers the CI/CD ingestion state machine: init, artifact upload, publish, abort — and in
+/// particular the authorization boundary between two registered repositories.
+/// </summary>
+[NotInParallel("repo-server-integration")]
+public class ReleasesControllerTests
+{
+    private const string BoardName = "Wemos-D1-Mini-ESP32";
+    private const string Changelog = "### Info\n- Something changed";
+
+    [ClassDataSource<WebApplicationFactory>(Shared = SharedType.PerTestSession)]
+    public required WebApplicationFactory Factory { get; init; }
+
+    [Before(Test)]
+    public Task Setup() => Factory.ResetDatabaseAsync();
+
+    // ---- Happy path ----
+
+    [Test]
+    public async Task FullReleaseLifecycle_InitUploadPublish_MakesVersionPublic()
+    {
+        var seed = await SeedAsync();
+        using var client = Factory.CreateCiCdClient(seed.RepositoryId);
+
+        var releaseId = await InitReleaseAsync(client, "1.5.1");
+
+        var upload = await UploadArtifactsAsync(client, releaseId, BoardName);
+        await Assert.That(upload.StatusCode).IsEqualTo(HttpStatusCode.OK);
+
+        var publish = await client.PostAsync($"/v2/firmware/releases/{releaseId}/publish", null);
+        await Assert.That(publish.IsSuccessStatusCode).IsTrue();
+
+        // Once published it must be visible on the public read path.
+        using var anon = Factory.CreateClient();
+        var latest = await anon.GetFromJsonAsync<JsonElement>("/v2/firmware/latest/stable");
+        await Assert.That(latest.GetProperty("version").GetString()).IsEqualTo("1.5.1");
+    }
+
+    // ---- Ownership (B2) ----
+
+    [Test]
+    public async Task Upload_FromDifferentRepository_IsForbidden()
+    {
+        var seed = await SeedAsync();
+        var intruderId = await RegisterRepositoryAsync("attacker", "evil-repo");
+
+        using var owner = Factory.CreateCiCdClient(seed.RepositoryId);
+        var releaseId = await InitReleaseAsync(owner, "1.5.1");
+
+        // A second registered repository is fully authenticated, but must not be able to inject
+        // binaries into someone else's in-flight release.
+        using var intruder = Factory.CreateCiCdClient(intruderId);
+        var response = await UploadArtifactsAsync(intruder, releaseId, BoardName);
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Forbidden);
+    }
+
+    [Test]
+    public async Task Publish_FromDifferentRepository_IsForbidden()
+    {
+        var seed = await SeedAsync();
+        var intruderId = await RegisterRepositoryAsync("attacker", "evil-repo");
+
+        using var owner = Factory.CreateCiCdClient(seed.RepositoryId);
+        var releaseId = await InitReleaseAsync(owner, "1.5.1");
+        await UploadArtifactsAsync(owner, releaseId, BoardName);
+
+        // Publishing someone else's release would attribute it to their repository and commit hash.
+        using var intruder = Factory.CreateCiCdClient(intruderId);
+        var response = await intruder.PostAsync($"/v2/firmware/releases/{releaseId}/publish", null);
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Forbidden);
+    }
+
+    [Test]
+    public async Task Abort_FromDifferentRepository_IsForbidden()
+    {
+        var seed = await SeedAsync();
+        var intruderId = await RegisterRepositoryAsync("attacker", "evil-repo");
+
+        using var owner = Factory.CreateCiCdClient(seed.RepositoryId);
+        var releaseId = await InitReleaseAsync(owner, "1.5.1");
+
+        using var intruder = Factory.CreateCiCdClient(intruderId);
+        var response = await intruder.DeleteAsync($"/v2/firmware/releases/{releaseId}");
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Forbidden);
+    }
+
+    [Test]
+    public async Task Releases_WithoutCiCdPrincipal_AreRejected()
+    {
+        await SeedAsync();
+
+        using var anon = Factory.CreateClient();
+        var response = await anon.PostAsJsonAsync("/v2/firmware/releases", new InitReleaseRequest
+        {
+            Version = "1.5.1",
+            Channel = "stable",
+            ReleaseDate = DateTimeOffset.UtcNow,
+            Boards = [BoardName],
+            Changelog = Changelog
+        });
+
+        await Assert.That(response.IsSuccessStatusCode).IsFalse();
+    }
+
+    // ---- Immutability (B3) ----
+
+    [Test]
+    public async Task Init_ForAlreadyPublishedVersion_IsRejected()
+    {
+        var seed = await SeedAsync();
+        using var client = Factory.CreateCiCdClient(seed.RepositoryId);
+
+        var releaseId = await InitReleaseAsync(client, "1.5.1");
+        await UploadArtifactsAsync(client, releaseId, BoardName);
+        await client.PostAsync($"/v2/firmware/releases/{releaseId}/publish", null);
+
+        // Re-initialising a published version would let a second release overwrite live artifacts at
+        // the same storage keys, and if abandoned, have them deleted by the TTL job.
+        var response = await client.PostAsJsonAsync("/v2/firmware/releases", new InitReleaseRequest
+        {
+            Version = "1.5.1",
+            Channel = "stable",
+            ReleaseDate = DateTimeOffset.UtcNow,
+            Boards = [BoardName],
+            Changelog = Changelog
+        });
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Conflict);
+    }
+
+    [Test]
+    public async Task Init_WhileAnotherReleaseIsStaging_IsRejected()
+    {
+        var seed = await SeedAsync();
+        using var client = Factory.CreateCiCdClient(seed.RepositoryId);
+
+        await InitReleaseAsync(client, "1.5.1");
+
+        var response = await client.PostAsJsonAsync("/v2/firmware/releases", new InitReleaseRequest
+        {
+            Version = "1.5.1",
+            Channel = "stable",
+            ReleaseDate = DateTimeOffset.UtcNow,
+            Boards = [BoardName],
+            Changelog = Changelog
+        });
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Conflict);
+    }
+
+    // ---- Validation ----
+
+    [Test]
+    public async Task Init_UnknownBoard_NamesTheOffendingBoard()
+    {
+        var seed = await SeedAsync();
+        using var client = Factory.CreateCiCdClient(seed.RepositoryId);
+
+        var response = await client.PostAsJsonAsync("/v2/firmware/releases", new InitReleaseRequest
+        {
+            Version = "1.5.1",
+            Channel = "stable",
+            ReleaseDate = DateTimeOffset.UtcNow,
+            Boards = [BoardName, "No-Such-Board"],
+            Changelog = Changelog
+        });
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+
+        // A CI operator reading this in a log needs the board name, not a UUID.
+        var body = await response.Content.ReadAsStringAsync();
+        await Assert.That(body).Contains("No-Such-Board");
+    }
+
+    [Test]
+    public async Task Init_InvalidChangelogWithoutNofail_Fails()
+    {
+        var seed = await SeedAsync();
+        using var client = Factory.CreateCiCdClient(seed.RepositoryId);
+
+        var response = await client.PostAsJsonAsync("/v2/firmware/releases", new InitReleaseRequest
+        {
+            Version = "1.5.1",
+            Channel = "stable",
+            ReleaseDate = DateTimeOffset.UtcNow,
+            Boards = [BoardName],
+            Changelog = "no headings here at all"
+        });
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+    }
+
+    [Test]
+    public async Task Init_InvalidChangelogWithNofail_LandsInEditing()
+    {
+        var seed = await SeedAsync();
+        using var client = Factory.CreateCiCdClient(seed.RepositoryId);
+
+        var response = await client.PostAsJsonAsync("/v2/firmware/releases?nofail", new InitReleaseRequest
+        {
+            Version = "1.5.1",
+            Channel = "stable",
+            ReleaseDate = DateTimeOffset.UtcNow,
+            Boards = [BoardName],
+            Changelog = "no headings here at all"
+        });
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Created);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        await Assert.That(body.GetProperty("status").GetString()).IsEqualTo("editing");
+    }
+
+    [Test]
+    public async Task Publish_WhileEditing_IsRejected()
+    {
+        var seed = await SeedAsync();
+        using var client = Factory.CreateCiCdClient(seed.RepositoryId);
+
+        var init = await client.PostAsJsonAsync("/v2/firmware/releases?nofail", new InitReleaseRequest
+        {
+            Version = "1.5.1",
+            Channel = "stable",
+            ReleaseDate = DateTimeOffset.UtcNow,
+            Boards = [BoardName],
+            Changelog = "no headings here at all"
+        });
+        var releaseId = (await init.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        await UploadArtifactsAsync(client, releaseId, BoardName);
+
+        var publish = await client.PostAsync($"/v2/firmware/releases/{releaseId}/publish", null);
+        await Assert.That(publish.StatusCode).IsEqualTo(HttpStatusCode.Conflict);
+    }
+
+    [Test]
+    public async Task Publish_WithoutAllDeclaredBoards_NamesTheMissingBoard()
+    {
+        var seed = await SeedAsync(extraBoardName: "Wemos-Lolin-S3");
+        using var client = Factory.CreateCiCdClient(seed.RepositoryId);
+
+        var init = await client.PostAsJsonAsync("/v2/firmware/releases", new InitReleaseRequest
+        {
+            Version = "1.5.1",
+            Channel = "stable",
+            ReleaseDate = DateTimeOffset.UtcNow,
+            Boards = [BoardName, "Wemos-Lolin-S3"],
+            Changelog = Changelog
+        });
+        var releaseId = (await init.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
+        await UploadArtifactsAsync(client, releaseId, BoardName);
+
+        var publish = await client.PostAsync($"/v2/firmware/releases/{releaseId}/publish", null);
+        await Assert.That(publish.IsSuccessStatusCode).IsFalse();
+
+        var body = await publish.Content.ReadAsStringAsync();
+        await Assert.That(body).Contains("Wemos-Lolin-S3");
+    }
+
+    [Test]
+    public async Task Upload_WithMismatchedSha256_IsRejected()
+    {
+        var seed = await SeedAsync();
+        using var client = Factory.CreateCiCdClient(seed.RepositoryId);
+        var releaseId = await InitReleaseAsync(client, "1.5.1");
+
+        var content = new MultipartFormDataContent();
+        var bytes = Encoding.UTF8.GetBytes("merged-artifact-bytes");
+        content.Add(new ByteArrayContent(bytes), "merged", "firmware.bin");
+        // A hash the payload does not have.
+        content.Add(new StringContent(
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["merged"] = new string('a', 64) })),
+            "sha256");
+
+        var response = await client.PutAsync(
+            $"/v2/firmware/releases/{releaseId}/boards/{BoardName}", content);
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+    }
+
+    [Test]
+    public async Task Upload_ForUndeclaredBoard_IsRejected()
+    {
+        var seed = await SeedAsync(extraBoardName: "Wemos-Lolin-S3");
+        using var client = Factory.CreateCiCdClient(seed.RepositoryId);
+        var releaseId = await InitReleaseAsync(client, "1.5.1");
+
+        var response = await UploadArtifactsAsync(client, releaseId, "Wemos-Lolin-S3");
+        await Assert.That(response.IsSuccessStatusCode).IsFalse();
+    }
+
+    [Test]
+    public async Task Abort_ByOwner_MakesReleaseUnpublishable()
+    {
+        var seed = await SeedAsync();
+        using var client = Factory.CreateCiCdClient(seed.RepositoryId);
+        var releaseId = await InitReleaseAsync(client, "1.5.1");
+
+        var abort = await client.DeleteAsync($"/v2/firmware/releases/{releaseId}");
+        await Assert.That(abort.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
+
+        var publish = await client.PostAsync($"/v2/firmware/releases/{releaseId}/publish", null);
+        await Assert.That(publish.IsSuccessStatusCode).IsFalse();
+    }
+
+    // ---- Helpers ----
+
+    private sealed record Seed(Guid RepositoryId, Guid BoardId, Guid ChipId);
+
+    private async Task<Seed> SeedAsync(string? extraBoardName = null)
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<RepoServerContext>();
+
+        var repo = new SourceRepository
+        {
+            Id = Guid.NewGuid(),
+            Provider = RepositoryProvider.Github,
+            Owner = "openshock",
+            Repo = "firmware"
+        };
+        var chip = new FirmwareChip
+        {
+            Id = Guid.NewGuid(),
+            Name = "ESP32",
+            Architecture = FirmwareChipArchitecture.Xtensa
+        };
+        var board = new FirmwareBoard
+        {
+            Id = Guid.NewGuid(),
+            Name = BoardName,
+            ChipId = chip.Id,
+            RequiredArtifactTypes = []
+        };
+
+        db.Repositories.Add(repo);
+        db.FirmwareChips.Add(chip);
+        db.FirmwareBoards.Add(board);
+
+        if (extraBoardName is not null)
+        {
+            db.FirmwareBoards.Add(new FirmwareBoard
+            {
+                Id = Guid.NewGuid(),
+                Name = extraBoardName,
+                ChipId = chip.Id,
+                RequiredArtifactTypes = []
+            });
+        }
+
+        await db.SaveChangesAsync();
+        return new Seed(repo.Id, board.Id, chip.Id);
+    }
+
+    private async Task<Guid> RegisterRepositoryAsync(string owner, string repo)
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<RepoServerContext>();
+
+        var row = new SourceRepository
+        {
+            Id = Guid.NewGuid(),
+            Provider = RepositoryProvider.Github,
+            Owner = owner,
+            Repo = repo
+        };
+        db.Repositories.Add(row);
+        await db.SaveChangesAsync();
+        return row.Id;
+    }
+
+    private static async Task<Guid> InitReleaseAsync(HttpClient client, string version)
+    {
+        var response = await client.PostAsJsonAsync("/v2/firmware/releases", new InitReleaseRequest
+        {
+            Version = version,
+            Channel = "stable",
+            ReleaseDate = DateTimeOffset.UtcNow,
+            Boards = [BoardName],
+            Changelog = Changelog
+        });
+
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return body.GetProperty("id").GetGuid();
+    }
+
+    private static async Task<HttpResponseMessage> UploadArtifactsAsync(
+        HttpClient client, Guid releaseId, string board)
+    {
+        var bytes = Encoding.UTF8.GetBytes($"merged-artifact-for-{board}");
+        var hash = Convert.ToHexString(SHA256.HashData(bytes));
+
+        var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(bytes), "merged", "firmware.bin");
+        content.Add(new StringContent(
+            JsonSerializer.Serialize(new Dictionary<string, string> { ["merged"] = hash })),
+            "sha256");
+
+        return await client.PutAsync($"/v2/firmware/releases/{releaseId}/boards/{board}", content);
+    }
+}

@@ -2,6 +2,7 @@ using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.Models.Firmware;
 using OpenShock.RepositoryServer.Problems;
 using OpenShock.RepositoryServer.RepoServerDb;
@@ -9,11 +10,13 @@ using OpenShock.RepositoryServer.RepoServerDb;
 namespace OpenShock.RepositoryServer.Controllers.V2.Firmware.Admin;
 
 /// <summary>
-/// Read-only + destructive admin for the shared <c>repositories</c> table. Rows are
-/// auto-created by <see cref="OpenShock.RepositoryServer.AuthenticationHandlers.GitHubOidcAuthentication"/>
-/// on the first CI/CD request from a given owner/repo pair — there is no create/upsert
-/// endpoint here by design.
+/// Admin for the shared <c>repositories</c> table, which doubles as the publish allowlist.
 /// </summary>
+/// <remarks>
+/// Registration here is what authorizes a repository to publish: OIDC token validation proves a
+/// workflow ran somewhere on GitHub, not that it ran in a repository we trust. Onboarding is therefore
+/// deliberately a manual admin action, and deletion is a real revocation.
+/// </remarks>
 [ApiVersion("2.0")]
 [ApiController]
 [Route("/v{version:apiVersion}/firmware/admin/repositories")]
@@ -37,6 +40,42 @@ public class RepositoriesController : OpenShockControllerBase
             .ToListAsync(ct);
 
         return Ok(rows.Select(RepositoryDto.From));
+    }
+
+    /// <summary>
+    /// Registers a repository as authorized to publish, or returns the existing row if already
+    /// registered. Idempotent, so re-running onboarding is harmless.
+    /// </summary>
+    [HttpPut]
+    public async Task<IActionResult> UpsertRepository(
+        [FromBody] UpsertRepositoryRequest request,
+        CancellationToken ct)
+    {
+        if (!Enum.TryParse<RepositoryProvider>(request.Provider, true, out var provider))
+        {
+            return Problem(FirmwareError.FirmwareInvalidRepositoryProvider);
+        }
+
+        var existing = await _db.Repositories.FirstOrDefaultAsync(
+            r => r.Provider == provider && r.Owner == request.Owner && r.Repo == request.Repo, ct);
+
+        if (existing is not null)
+        {
+            return Ok(RepositoryDto.From(existing));
+        }
+
+        var row = new SourceRepository
+        {
+            Id = Guid.NewGuid(),
+            Provider = provider,
+            Owner = request.Owner,
+            Repo = request.Repo
+        };
+
+        _db.Repositories.Add(row);
+        await _db.SaveChangesAsync(ct);
+
+        return Created((string?)null, RepositoryDto.From(row));
     }
 
     [HttpDelete("{repositoryId:guid}")]

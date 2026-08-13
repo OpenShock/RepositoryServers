@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.Models.Firmware;
@@ -122,12 +123,71 @@ public class RepositoriesAdminControllerTests
     }
 
     [Test]
-    public async Task Post_NotAllowed_ReturnsMethodNotAllowed()
+    public async Task Put_RegistersRepository_AsThePublishAllowlistEntry()
     {
         using var client = Factory.CreateAdminClient();
-        var response = await client.PostAsJsonAsync(BasePath, new { Provider = "github", Owner = "x", Repo = "y" });
-        // Repositories are created automatically by the OIDC handler — manual creation
-        // is not exposed, so POST must be rejected.
-        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.MethodNotAllowed);
+
+        var response = await client.PutAsJsonAsync(BasePath, new UpsertRepositoryRequest
+        {
+            Provider = "github",
+            Owner = "openshock",
+            Repo = "firmware"
+        });
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Created);
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        await Assert.That(body.GetProperty("owner").GetString()).IsEqualTo("openshock");
+        await Assert.That(body.GetProperty("repo").GetString()).IsEqualTo("firmware");
+        await Assert.That(Guid.Parse(body.GetProperty("id").GetString()!)).IsNotEqualTo(Guid.Empty);
+    }
+
+    [Test]
+    public async Task Put_IsIdempotent_SoRerunningOnboardingIsHarmless()
+    {
+        using var client = Factory.CreateAdminClient();
+
+        var first = await client.PutAsJsonAsync(BasePath, new UpsertRepositoryRequest
+        {
+            Provider = "github", Owner = "openshock", Repo = "firmware"
+        });
+        var firstId = (await first.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString();
+
+        var second = await client.PutAsJsonAsync(BasePath, new UpsertRepositoryRequest
+        {
+            Provider = "github", Owner = "openshock", Repo = "firmware"
+        });
+
+        await Assert.That(second.StatusCode).IsEqualTo(HttpStatusCode.OK);
+        var secondId = (await second.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString();
+        await Assert.That(secondId).IsEqualTo(firstId);
+    }
+
+    [Test]
+    public async Task Put_UnknownProvider_Returns400()
+    {
+        using var client = Factory.CreateAdminClient();
+
+        var response = await client.PutAsJsonAsync(BasePath, new UpsertRepositoryRequest
+        {
+            Provider = "bitbucket", Owner = "openshock", Repo = "firmware"
+        });
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+    }
+
+    [Test]
+    public async Task Put_WithoutAdminToken_IsRejected()
+    {
+        // Onboarding is the authorization decision for publishing, so it must not be reachable
+        // without the admin token.
+        using var client = Factory.CreateClient();
+
+        var response = await client.PutAsJsonAsync(BasePath, new UpsertRepositoryRequest
+        {
+            Provider = "github", Owner = "attacker", Repo = "evil"
+        });
+
+        await Assert.That(response.IsSuccessStatusCode).IsFalse();
     }
 }

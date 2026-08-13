@@ -37,6 +37,12 @@ public static class FirmwareError
     public static OpenShockProblem FirmwareReleaseNotesNotFinalized =>
         new("firmware/release-notes-not-finalized", "Release notes must be finalized before publish", HttpStatusCode.Conflict);
 
+    public static OpenShockProblem FirmwareInvalidRepositoryProvider => new("Firmware.InvalidRepositoryProvider", "The repository provider provided is not valid");
+    public static OpenShockProblem FirmwareReleaseNotOwned =>
+        new("Firmware.ReleaseNotOwned", "The release belongs to a different repository", HttpStatusCode.Forbidden);
+    public static OpenShockProblem FirmwareVersionAlreadyPublished =>
+        new("Firmware.VersionAlreadyPublished", "This version has already been published and is immutable", HttpStatusCode.Conflict);
+
     public static OpenShockProblem FirmwareRepositoryNotFound => new("Firmware.RepositoryNotFound", "The referenced source repository was not found", HttpStatusCode.NotFound);
     public static OpenShockProblem FirmwareRepositoryInUse => new("Firmware.RepositoryInUse", "Cannot delete repository that is referenced by firmware or desktop versions", HttpStatusCode.Conflict);
 

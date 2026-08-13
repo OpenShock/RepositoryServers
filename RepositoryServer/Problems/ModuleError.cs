@@ -5,6 +5,7 @@ namespace OpenShock.RepositoryServer.Problems;
 public static class ModuleError
 {
     public static OpenShockProblem ModuleNotFound => new OpenShockProblem("Module.NotFound", "The referenced module was not found", HttpStatusCode.NotFound);
+    public static OpenShockProblem ModuleNotOwned => new OpenShockProblem("Module.NotOwned", "This repository is not authorized to publish to this module", HttpStatusCode.Forbidden);
     public static OpenShockProblem ZipInvalid => new OpenShockProblem("Module.ZipInvalid", "The uploaded file is not a valid zip archive");
     public static OpenShockProblem ZipEmpty => new OpenShockProblem("Module.ZipEmpty", "The uploaded zip archive contains no entries");
     public static OpenShockProblem ZipPathTraversal => new OpenShockProblem("Module.ZipPathTraversal", "The zip archive contains entries with path traversal sequences");

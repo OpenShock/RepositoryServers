@@ -94,9 +94,12 @@ docker/
 ## Key Patterns
 - **Auth**: Two schemes. `AdminTokenAuthentication` (header compare) for admin endpoints;
   JwtBearer + `GitHubOidcAuthentication.Configure(...)` for CI/CD endpoints. The OIDC hook
-  validates a GitHub Actions OIDC JWT, then looks up (or inserts) a matching row in the
-  `repositories` table and attaches `AuthSchemas.CiCdClaims` to the principal.
-  No config allowlist — the DB is authoritative.
+  validates a GitHub Actions OIDC JWT, then looks up a matching row in the `repositories`
+  table and attaches `AuthSchemas.CiCdClaims` to the principal. **Unregistered repositories are
+  rejected** — the table is the publish allowlist, and a valid OIDC token alone says nothing about
+  which repo is calling. Onboarding is `PUT /v2/firmware/admin/repositories` (admin token).
+  Authorization does not stop there: release upload/publish/abort each re-check that the release
+  belongs to the calling repository, and desktop modules carry an owning `repository_id`.
 - **Error Handling**: `OpenShockProblem` base class → `ToObjectResult()` for RFC 7807
 - **Config**: Bind root config to `ApiConfig`, validated with MiniValidator, registered as singleton
 - **Background jobs**: `StagedReleaseCleanupService` (`BackgroundService` with `PeriodicTimer`)

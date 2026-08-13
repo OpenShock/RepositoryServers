@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
@@ -57,6 +58,23 @@ public sealed class WebApplicationFactory
     }
 
     /// <summary>
+    /// Returns an <see cref="HttpClient"/> authenticated as the CI/CD principal of
+    /// <paramref name="repositoryId"/>, which must be a registered repository.
+    /// </summary>
+    public HttpClient CreateCiCdClient(Guid repositoryId, string? commitHash = null)
+    {
+        var client = CreateClient();
+        client.DefaultRequestHeaders.TryAddWithoutValidation(
+            TestCiCdAuthHandler.RepositoryIdHeader, repositoryId.ToString());
+        if (commitHash is not null)
+        {
+            client.DefaultRequestHeaders.TryAddWithoutValidation(
+                TestCiCdAuthHandler.CommitHashHeader, commitHash);
+        }
+        return client;
+    }
+
+    /// <summary>
     /// Wipes all mutable test data between tests without tearing down the container.
     /// Firmware tables first (FK order), then repositories, then catalog.
     /// </summary>
@@ -81,6 +99,8 @@ public sealed class WebApplicationFactory
                 firmware_advisories,
                 usb_serial_filters,
                 usb_devices,
+                versions,
+                modules,
                 repositories
             RESTART IDENTITY CASCADE;
             """, ct);
@@ -119,6 +139,18 @@ public sealed class WebApplicationFactory
 
         builder.ConfigureTestServices(services =>
         {
+            // Repoint the CI/CD scheme at the test handler — see TestCiCdAuthHandler for what this
+            // does and does not substitute. The scheme is already registered as JwtBearer by
+            // Program.cs, and registering the same name twice fails host startup, so swap the handler
+            // type on the existing registration rather than adding a second one.
+            services.PostConfigure<AuthenticationOptions>(options =>
+            {
+                if (options.SchemeMap.TryGetValue(AuthSchemas.CiCdToken, out var scheme))
+                {
+                    scheme.HandlerType = typeof(TestCiCdAuthHandler);
+                }
+            });
+
             // The cleanup hosted service fires on startup and queries the DB. In tests
             // we build schema AFTER the host starts, so suppress it to avoid noisy
             // failure logs. Individual tests exercise its logic directly if needed.

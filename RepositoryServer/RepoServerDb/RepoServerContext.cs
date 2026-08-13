@@ -156,6 +156,12 @@ public partial class RepoServerContext : DbContext
             entity.Property(e => e.SourceUrl)
                 .HasMaxLength(256)
                 .HasColumnName("source_url");
+            entity.Property(e => e.RepositoryId).HasColumnName("repository_id");
+
+            entity.HasOne(d => d.RepositoryNavigation).WithMany()
+                .HasForeignKey(d => d.RepositoryId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("fk_modules_repository");
         });
 
         modelBuilder.Entity<Version>(entity =>

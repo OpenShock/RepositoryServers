@@ -41,4 +41,8 @@
   <ItemGroup>
     <Folder Include="Migrations\" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="OpenShock.RepositoryServer.Tests" />
+  </ItemGroup>
+
 </Project>
