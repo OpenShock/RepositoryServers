@@ -19,7 +19,8 @@ namespace OpenShock.RepositoryServer.Migrations
                 .Annotation("Npgsql:Enum:firmware_release_note_type", "breaking,info,section,warning")
                 .Annotation("Npgsql:Enum:release_channel", "beta,develop,stable")
                 .Annotation("Npgsql:Enum:release_status", "aborted,archived,editing,published,staging")
-                .Annotation("Npgsql:Enum:repository_provider", "github");
+                .Annotation("Npgsql:Enum:repository_provider", "github")
+                .Annotation("Npgsql:Enum:repository_scope", "publish_firmware,publish_modules");
 
             migrationBuilder.AddColumn<Guid>(
                 name: "repository_id",
@@ -63,7 +64,8 @@ namespace OpenShock.RepositoryServer.Migrations
                     id = table.Column<Guid>(type: "uuid", nullable: false),
                     provider = table.Column<RepositoryProvider>(type: "repository_provider", nullable: false),
                     owner = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
-                    repo = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false)
+                    repo = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    scopes = table.Column<RepositoryScope[]>(type: "repository_scope[]", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -370,8 +372,7 @@ namespace OpenShock.RepositoryServer.Migrations
             migrationBuilder.CreateIndex(
                 name: "ix_repositories_provider_owner_repo",
                 table: "repositories",
-                columns: new[] { "provider", "owner", "repo" },
-                unique: true);
+                columns: new[] { "provider", "owner", "repo" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_usb_devices_vid_pid",
@@ -416,6 +417,15 @@ namespace OpenShock.RepositoryServer.Migrations
                     ON firmware_boards (lower(name));
                 """);
 
+            // GitHub treats owner and repo names case-insensitively, and the casing in an OIDC token
+            // follows whatever the repository is currently called. Matching exactly would let a
+            // cosmetic rename silently de-authorize a repository, or let two rows represent one grant.
+            migrationBuilder.Sql(
+                """
+                CREATE UNIQUE INDEX ix_repositories_provider_owner_repo_lower
+                    ON repositories (provider, lower(owner), lower(repo));
+                """);
+
             // At most one open release per version. InitRelease guards this with a read-then-insert,
             // which two concurrent jobs for the same tag both pass; they would then stage into the
             // same CDN keys and race each other's uploads, producing a permanent hash mismatch for
@@ -433,6 +443,7 @@ namespace OpenShock.RepositoryServer.Migrations
         {
             // Raw-SQL indexes from Up — dropped first so the tables below come down cleanly.
             migrationBuilder.Sql("DROP INDEX IF EXISTS ix_firmware_releases_open_version;");
+            migrationBuilder.Sql("DROP INDEX IF EXISTS ix_repositories_provider_owner_repo_lower;");
             migrationBuilder.Sql("DROP INDEX IF EXISTS ix_firmware_boards_name_lower;");
             migrationBuilder.Sql("DROP INDEX IF EXISTS ix_firmware_chips_name_lower;");
 
@@ -497,7 +508,8 @@ namespace OpenShock.RepositoryServer.Migrations
                 .OldAnnotation("Npgsql:Enum:firmware_release_note_type", "breaking,info,section,warning")
                 .OldAnnotation("Npgsql:Enum:release_channel", "beta,develop,stable")
                 .OldAnnotation("Npgsql:Enum:release_status", "aborted,archived,editing,published,staging")
-                .OldAnnotation("Npgsql:Enum:repository_provider", "github");
+                .OldAnnotation("Npgsql:Enum:repository_provider", "github")
+                .OldAnnotation("Npgsql:Enum:repository_scope", "publish_firmware,publish_modules");
         }
     }
 }

@@ -6,6 +6,7 @@ using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.Models.Firmware;
 using OpenShock.RepositoryServer.Problems;
 using OpenShock.RepositoryServer.RepoServerDb;
+using OpenShock.RepositoryServer.Utils;
 
 namespace OpenShock.RepositoryServer.Controllers.V2.Firmware.Admin;
 
@@ -56,11 +57,33 @@ public class RepositoriesController : OpenShockControllerBase
             return Problem(FirmwareError.FirmwareInvalidRepositoryProvider);
         }
 
+        var scopes = new List<RepositoryScope>();
+        foreach (var raw in request.Scopes ?? [])
+        {
+            if (!RepositoryScopeExtensions.TryParseScope(raw, out var scope))
+            {
+                return Problem(FirmwareError.FirmwareInvalidRepositoryScope(raw));
+            }
+            if (!scopes.Contains(scope)) scopes.Add(scope);
+        }
+
+        // Matched case-insensitively, consistent with how GitHub treats owner and repo names and with
+        // how the OIDC handler resolves them — otherwise onboarding "OpenShock/Firmware" would create
+        // a second row that the handler's lookup for "openshock/firmware" would never reach.
+        var loweredOwner = request.Owner.ToLowerInvariant();
+        var loweredRepo = request.Repo.ToLowerInvariant();
+
         var existing = await _db.Repositories.FirstOrDefaultAsync(
-            r => r.Provider == provider && r.Owner == request.Owner && r.Repo == request.Repo, ct);
+            r => r.Provider == provider
+                 && r.Owner.ToLower() == loweredOwner
+                 && r.Repo.ToLower() == loweredRepo, ct);
 
         if (existing is not null)
         {
+            // Idempotent on identity, but scopes are authoritative: re-running onboarding with a
+            // different set is how a grant is widened or narrowed.
+            existing.Scopes = scopes.ToArray();
+            await _db.SaveChangesAsync(ct);
             return Ok(RepositoryDto.From(existing));
         }
 
@@ -69,7 +92,8 @@ public class RepositoriesController : OpenShockControllerBase
             Id = Guid.NewGuid(),
             Provider = provider,
             Owner = request.Owner,
-            Repo = request.Repo
+            Repo = request.Repo,
+            Scopes = scopes.ToArray()
         };
 
         _db.Repositories.Add(row);

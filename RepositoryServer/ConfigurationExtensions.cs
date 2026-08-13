@@ -7,7 +7,15 @@ public static class ConfigurationExtensions
     public static T GetAndRegisterOpenShockConfig<T>(this WebApplicationBuilder builder) where T : class
     {
 #if DEBUG
-        Console.WriteLine(builder.Configuration.GetDebugView());
+        // GetDebugView() prints every configuration value AND the process environment, which includes
+        // the admin token, the database password, storage credentials and Discord webhook URLs. Only
+        // the resolved keys are printed, which is what is actually useful for diagnosing binding.
+        Console.WriteLine("Configuration keys:");
+        foreach (var (key, value) in builder.Configuration.AsEnumerable().OrderBy(kv => kv.Key))
+        {
+            if (value is null) continue;
+            Console.WriteLine($"  {key} = {RedactIfSensitive(key, value)}");
+        }
 #endif
 
         var config = builder.Configuration
@@ -37,12 +45,30 @@ public static class ConfigurationExtensions
             Environment.Exit(-10);
         }
 
-#if DEBUG
-        Console.WriteLine(JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true }));
-#endif
 
         builder.Services.AddSingleton<T>(config);
 
         return config;
     }
+
+#if DEBUG
+    private static readonly string[] SensitiveKeyFragments =
+        ["token", "password", "secret", "key", "conn", "webhook"];
+
+    /// <summary>
+    /// Masks values whose key looks credential-bearing. Name-based rather than attribute-based so a
+    /// newly added secret is redacted by default instead of needing to be remembered.
+    /// </summary>
+    private static string RedactIfSensitive(string key, string value)
+    {
+        foreach (var fragment in SensitiveKeyFragments)
+        {
+            if (key.Contains(fragment, StringComparison.OrdinalIgnoreCase))
+            {
+                return $"*** ({value.Length} chars)";
+            }
+        }
+        return value;
+    }
+#endif
 }

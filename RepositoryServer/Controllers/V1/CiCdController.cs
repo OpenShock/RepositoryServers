@@ -17,7 +17,7 @@ namespace OpenShock.RepositoryServer.Controllers.V1;
 [ApiVersion("1.0")]
 [ApiController]
 [Route("/v{version:apiVersion}/cicd")]
-[Authorize(AuthenticationSchemes = AuthSchemas.CiCdToken)]
+[Authorize(AuthenticationSchemes = AuthSchemas.CiCdToken, Policy = AuthSchemas.Policies.PublishModules)]
 public class CiCdController : OpenShockControllerBase
 {
     private readonly RepoServerContext _db;

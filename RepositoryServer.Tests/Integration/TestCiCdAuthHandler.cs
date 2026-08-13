@@ -27,6 +27,16 @@ public sealed class TestCiCdAuthHandler : AuthenticationHandler<AuthenticationSc
     public const string RefHeader = "X-Test-Ref";
     public const string RunIdHeader = "X-Test-Run-Id";
 
+    /// <summary>
+    /// Comma-separated scopes. Defaults to both, so tests opt in to restricting a grant. Use
+    /// <see cref="NoScopes"/> to model a repository that is registered but granted nothing — an
+    /// empty header value cannot express that, because HttpClient drops empty headers.
+    /// </summary>
+    public const string ScopesHeader = "X-Test-Scopes";
+
+    /// <summary>Sentinel meaning "registered, but no scopes granted".</summary>
+    public const string NoScopes = "none";
+
     public TestCiCdAuthHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
@@ -56,6 +66,17 @@ public sealed class TestCiCdAuthHandler : AuthenticationHandler<AuthenticationSc
             new(AuthSchemas.CiCdClaims.RepositoryId, repositoryId.ToString()),
             new(AuthSchemas.CiCdClaims.CommitHash, commitHash)
         };
+
+        var rawScopes = Request.Headers.TryGetValue(ScopesHeader, out var scopeHeader)
+            ? scopeHeader.ToString()
+            : "publish_firmware,publish_modules";
+        if (!string.Equals(rawScopes, NoScopes, StringComparison.Ordinal))
+        {
+            foreach (var scope in rawScopes.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                claims.Add(new Claim(AuthSchemas.CiCdClaims.Scope, scope));
+            }
+        }
 
         if (Request.Headers.TryGetValue(RefHeader, out var rawRef) && !string.IsNullOrWhiteSpace(rawRef))
         {

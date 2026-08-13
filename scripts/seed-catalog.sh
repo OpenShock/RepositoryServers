@@ -17,6 +17,9 @@
 #
 # Optionally also register the firmware repository as authorized to publish:
 #   PUBLISH_OWNER=OpenShock PUBLISH_REPO=firmware ./scripts/seed-catalog.sh
+#
+# PUBLISH_SCOPES defaults to publish_firmware. Use publish_modules for a desktop module repository,
+# or a comma-separated pair to grant both. A repository registered with no scopes cannot publish.
 
 set -euo pipefail
 
@@ -107,9 +110,12 @@ done
 
 if [ -n "${PUBLISH_OWNER:-}" ] && [ -n "${PUBLISH_REPO:-}" ]; then
   echo "==> Publish allowlist"
-  payload=$(printf '{"provider":"github","owner":"%s","repo":"%s"}' "$PUBLISH_OWNER" "$PUBLISH_REPO")
+  scopes_json=$(printf '%s' "${PUBLISH_SCOPES:-publish_firmware}" \
+    | tr ',' '\n' | jq -R . | jq -sc 'map(select(length > 0))')
+  payload=$(jq -nc --arg o "$PUBLISH_OWNER" --arg r "$PUBLISH_REPO" --argjson s "$scopes_json" \
+    '{provider: "github", owner: $o, repo: $r, scopes: $s}')
   api PUT /repositories "$payload" >/dev/null
-  echo "    registered $PUBLISH_OWNER/$PUBLISH_REPO"
+  echo "    registered $PUBLISH_OWNER/$PUBLISH_REPO with scopes ${PUBLISH_SCOPES:-publish_firmware}"
 fi
 
 echo "==> Done"

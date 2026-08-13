@@ -6,7 +6,6 @@ public sealed class FirmwareConfig
 {
     [Required(AllowEmptyStrings = false)] public required string CdnBaseUrl { get; init; }
     [Required] public required StorageConfig Storage { get; init; }
-    [Required] public required FirmwareCiCdConfig CiCd { get; init; }
 
     /// <summary>
     /// How long a release may remain in <c>staging</c> status before the cleanup job aborts it.

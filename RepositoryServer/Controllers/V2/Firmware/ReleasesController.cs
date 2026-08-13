@@ -22,7 +22,7 @@ namespace OpenShock.RepositoryServer.Controllers.V2.Firmware;
 [ApiVersion("2.0")]
 [ApiController]
 [Route("/v{version:apiVersion}/firmware/releases")]
-[Authorize(AuthenticationSchemes = AuthSchemas.CiCdToken)]
+[Authorize(AuthenticationSchemes = AuthSchemas.CiCdToken, Policy = AuthSchemas.Policies.PublishFirmware)]
 public class ReleasesController : OpenShockControllerBase
 {
     private static readonly Dictionary<string, FirmwareArtifactType> ArtifactFieldNames = new(StringComparer.OrdinalIgnoreCase)

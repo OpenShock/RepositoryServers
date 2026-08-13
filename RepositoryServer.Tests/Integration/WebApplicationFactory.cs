@@ -61,11 +61,16 @@ public sealed class WebApplicationFactory
     /// Returns an <see cref="HttpClient"/> authenticated as the CI/CD principal of
     /// <paramref name="repositoryId"/>, which must be a registered repository.
     /// </summary>
-    public HttpClient CreateCiCdClient(Guid repositoryId, string? commitHash = null)
+    public HttpClient CreateCiCdClient(Guid repositoryId, string? commitHash = null, string? scopes = null)
     {
         var client = CreateClient();
         client.DefaultRequestHeaders.TryAddWithoutValidation(
             TestCiCdAuthHandler.RepositoryIdHeader, repositoryId.ToString());
+        if (scopes is not null)
+        {
+            client.DefaultRequestHeaders.TryAddWithoutValidation(
+                TestCiCdAuthHandler.ScopesHeader, scopes);
+        }
         if (commitHash is not null)
         {
             client.DefaultRequestHeaders.TryAddWithoutValidation(
@@ -130,10 +135,11 @@ public sealed class WebApplicationFactory
 
             ["AdminToken"] = TestAdminToken.Value,
 
+            ["CiCd:Audience"] = "openshock-repository-server-test",
+
             ["Repo:CdnBaseUrl"] = "https://cdn-test.openshock.example/repo",
 
             ["Firmware:CdnBaseUrl"] = "https://cdn-test.openshock.example/firmware",
-            ["Firmware:CiCd:Audience"] = "openshock-repository-server-test",
             ["Firmware:Storage:Type"] = "Local",
             ["Firmware:Storage:Local:BasePath"] = _cdnStoragePath,
             ["Firmware:StagedReleaseTtl"] = "01:00:00",

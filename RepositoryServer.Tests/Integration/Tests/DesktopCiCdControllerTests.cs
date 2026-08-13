@@ -77,6 +77,19 @@ public class DesktopCiCdControllerTests
         await Assert.That(second.StatusCode).IsEqualTo(HttpStatusCode.Conflict);
     }
 
+    [Test]
+    public async Task Publish_WithOnlyTheFirmwareScope_IsForbidden()
+    {
+        var ownerId = await RegisterRepositoryAsync("openshock", "desktop");
+        await SeedModuleAsync(ownerId);
+
+        // The mirror of the firmware check: a firmware-only grant must not reach module publishing.
+        using var client = Factory.CreateCiCdClient(ownerId, scopes: "publish_firmware");
+        var response = await PublishAsync(client, "1.0.0");
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Forbidden);
+    }
+
     // ---- Helpers ----
 
     private async Task<Guid> RegisterRepositoryAsync(string owner, string repo)

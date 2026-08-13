@@ -43,6 +43,8 @@ public static class FirmwareError
         new("Firmware.ChipNameConflict", "A chip with this name already exists (names are compared case-insensitively)", HttpStatusCode.Conflict);
 
     public static OpenShockProblem FirmwareInvalidRepositoryProvider => new("Firmware.InvalidRepositoryProvider", "The repository provider provided is not valid");
+    public static OpenShockProblem FirmwareInvalidRepositoryScope(string scope) =>
+        new("Firmware.InvalidRepositoryScope", $"Unknown repository scope '{scope}'. Valid scopes: publish_firmware, publish_modules");
     public static OpenShockProblem FirmwareReleaseNotOwned =>
         new("Firmware.ReleaseNotOwned", "The release belongs to a different repository", HttpStatusCode.Forbidden);
     public static OpenShockProblem FirmwareVersionAlreadyPublished =>

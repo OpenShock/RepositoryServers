@@ -666,6 +666,12 @@ Authorization: Bearer <github-oidc-jwt>
 
 On successful auth, the matched `repository_id` and extracted claims (`sha`, `ref`, `run_id`) are attached to the request context for use by the release endpoints.
 
+**Scopes**: registration records what a repository may publish — `publish_firmware`,
+`publish_modules`, or both. Firmware and desktop ingestion share this one authentication scheme, so
+without scopes a repository onboarded to publish desktop modules could also initialise and publish
+firmware releases. A repository registered with no scopes is authenticated but cannot publish
+anything. Scopes are entirely server-side: a publishing workflow neither sends nor sees them.
+
 **Per-release ownership**: authentication identifies *a* registered repository, not *which* release it
 may act on. Every registered repository presents an equally valid principal, so `InitRelease` records
 the caller's `repository_id` on the release, and upload, publish and abort each re-check it and return
@@ -679,13 +685,20 @@ module with no owner assigned is closed to every publisher rather than open to a
 
 ```jsonc
 {
-  "Firmware": {
-    "CiCd": {
-      "Audience": "https://repo.openshock.org"
-    }
+  "CiCd": {
+    "Audience": "openshock-repository-server"
   }
 }
 ```
+
+Deliberately not nested under `Firmware`: the scheme it configures also guards desktop module
+publishing.
+
+**What the audience is for**: it makes a token non-transferable between services. `id-token: write` is
+granted per job, so any action in a publishing workflow can mint a token; without this check a token
+obtained for an unrelated vendor would still be a valid publishing credential here, since it carries
+the same `repository` claim. It is not a secret — anyone can request it by name — so it authenticates
+nothing about *who* is calling. That is the allowlist's job.
 
 **GitHub Actions workflow setup**:
 
@@ -927,11 +940,16 @@ PUT /2/firmware/admin/repositories
 {
   "provider": "github",
   "owner": "openshock",
-  "repo": "firmware"
+  "repo": "firmware",
+  "scopes": ["publish_firmware"]     // publish_firmware | publish_modules
 }
 ```
 
-Registers a repository. Unique constraint on `(provider, owner, repo)`; idempotent, so re-running
+Registers a repository. `provider`, `owner` and `repo` are matched **case-insensitively** — GitHub
+treats owner and repo names that way, and the casing in an OIDC token follows whatever the repository
+is currently called, so an exact match would let a cosmetic rename silently de-authorize it. Scopes are
+authoritative on re-registration: re-running onboarding with a different set widens or narrows the
+grant. Omitting them registers the repository without letting it publish anything. Unique constraint on `(provider, owner, repo)`; idempotent, so re-running
 onboarding is harmless.
 
 **This is the publish allowlist, not a bookkeeping table.** A GitHub OIDC token proves only that some

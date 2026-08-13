@@ -20,4 +20,5 @@ public static class UniqueViolation
 
     public const string BoardNameLower = "ix_firmware_boards_name_lower";
     public const string ChipNameLower = "ix_firmware_chips_name_lower";
+    public const string RepositoryIdentityLower = "ix_repositories_provider_owner_repo_lower";
 }

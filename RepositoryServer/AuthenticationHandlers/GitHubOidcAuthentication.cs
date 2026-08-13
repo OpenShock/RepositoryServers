@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.RepoServerDb;
+using OpenShock.RepositoryServer.Utils;
 
 namespace OpenShock.RepositoryServer.AuthenticationHandlers;
 
@@ -81,8 +82,8 @@ public static class GitHubOidcAuthentication
             .GetRequiredService<IDbContextFactory<RepoServerContext>>();
         await using var db = await dbFactory.CreateDbContextAsync(context.HttpContext.RequestAborted);
 
-        var repositoryId = await FindRepositoryAsync(db, owner, repo, context.HttpContext.RequestAborted);
-        if (repositoryId is null)
+        var registration = await FindRepositoryAsync(db, owner, repo, context.HttpContext.RequestAborted);
+        if (registration is null)
         {
             // Deliberately does not disclose whether the repository is merely unregistered.
             context.Fail("Repository is not authorized to publish.");
@@ -90,7 +91,14 @@ public static class GitHubOidcAuthentication
         }
 
         var identity = (ClaimsIdentity)principal.Identity!;
-        identity.AddClaim(new Claim(AuthSchemas.CiCdClaims.RepositoryId, repositoryId.ToString()));
+        identity.AddClaim(new Claim(AuthSchemas.CiCdClaims.RepositoryId, registration.Id.ToString()));
+
+        // Scopes decide which ingestion endpoints this grant reaches. A repository with none is
+        // registered but cannot publish anything.
+        foreach (var scope in registration.Scopes)
+        {
+            identity.AddClaim(new Claim(AuthSchemas.CiCdClaims.Scope, scope.ToScopeClaim()));
+        }
         identity.AddClaim(new Claim(AuthSchemas.CiCdClaims.CommitHash, commitHash));
         if (!string.IsNullOrWhiteSpace(refValue))
             identity.AddClaim(new Claim(AuthSchemas.CiCdClaims.Ref, refValue));
@@ -98,18 +106,29 @@ public static class GitHubOidcAuthentication
             identity.AddClaim(new Claim(AuthSchemas.CiCdClaims.RunId, runId));
     }
 
+    private sealed record Registration(Guid Id, RepositoryScope[] Scopes);
+
     /// <summary>
     /// Resolves a pre-registered repository. Returns <c>null</c> when the pair is not registered —
     /// never creates the row, since that would make the allowlist self-populating and authorize
     /// whoever showed up first.
     /// </summary>
-    private static async Task<Guid?> FindRepositoryAsync(RepoServerContext db, string owner, string repo, CancellationToken ct)
+    /// <remarks>
+    /// Owner and repo are matched case-insensitively. GitHub treats them that way, and the casing in
+    /// the token's claims follows whatever the repository is currently named, so an exact match would
+    /// silently stop authorizing a repository after a cosmetic rename.
+    /// </remarks>
+    private static async Task<Registration?> FindRepositoryAsync(RepoServerContext db, string owner, string repo, CancellationToken ct)
     {
         const RepositoryProvider provider = RepositoryProvider.Github;
+        var loweredOwner = owner.ToLowerInvariant();
+        var loweredRepo = repo.ToLowerInvariant();
 
         return await db.Repositories
-            .Where(r => r.Provider == provider && r.Owner == owner && r.Repo == repo)
-            .Select(r => (Guid?)r.Id)
+            .Where(r => r.Provider == provider
+                        && r.Owner.ToLower() == loweredOwner
+                        && r.Repo.ToLower() == loweredRepo)
+            .Select(r => new Registration(r.Id, r.Scopes))
             .FirstOrDefaultAsync(ct);
     }
 }

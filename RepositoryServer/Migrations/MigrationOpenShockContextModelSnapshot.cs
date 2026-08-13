@@ -28,6 +28,7 @@ namespace OpenShock.Desktop.RepositoryServer.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "release_channel", new[] { "beta", "develop", "stable" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "release_status", new[] { "aborted", "archived", "editing", "published", "staging" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "repository_provider", new[] { "github" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "repository_scope", new[] { "publish_firmware", "publish_modules" });
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("OpenShock.RepositoryServer.RepoServerDb.FirmwareAdvisory", b =>
@@ -469,11 +470,15 @@ namespace OpenShock.Desktop.RepositoryServer.Migrations
                         .HasColumnType("character varying(128)")
                         .HasColumnName("repo");
 
+                    b.PrimitiveCollection<RepositoryScope[]>("Scopes")
+                        .IsRequired()
+                        .HasColumnType("repository_scope[]")
+                        .HasColumnName("scopes");
+
                     b.HasKey("Id")
                         .HasName("repositories_pkey");
 
                     b.HasIndex("Provider", "Owner", "Repo")
-                        .IsUnique()
                         .HasDatabaseName("ix_repositories_provider_owner_repo");
 
                     b.ToTable("repositories", (string)null);

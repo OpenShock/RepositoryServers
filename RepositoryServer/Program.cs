@@ -10,6 +10,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenShock.RepositoryServer;
 using OpenShock.RepositoryServer.AuthenticationHandlers;
 using OpenShock.RepositoryServer.Config;
+using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.ExceptionHandler;
 using OpenShock.RepositoryServer.RepoServerDb;
 using OpenShock.RepositoryServer.Services;
@@ -58,10 +59,20 @@ builder.Services.AddAuthentication()
         AuthSchemas.AdminToken, _ => { })
     .AddJwtBearer(AuthSchemas.CiCdToken, options =>
     {
-        GitHubOidcAuthentication.Configure(options, config.Firmware.CiCd.Audience);
+        GitHubOidcAuthentication.Configure(options, config.CiCd.Audience);
     });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorizationBuilder()
+    // Firmware and desktop ingestion share the CI/CD scheme, so being authenticated is not enough:
+    // each endpoint requires the scope its grant was issued for.
+    .AddPolicy(AuthSchemas.Policies.PublishFirmware, policy => policy
+        .AddAuthenticationSchemes(AuthSchemas.CiCdToken)
+        .RequireAuthenticatedUser()
+        .RequireClaim(AuthSchemas.CiCdClaims.Scope, RepositoryScope.PublishFirmware.ToScopeClaim()))
+    .AddPolicy(AuthSchemas.Policies.PublishModules, policy => policy
+        .AddAuthenticationSchemes(AuthSchemas.CiCdToken)
+        .RequireAuthenticatedUser()
+        .RequireClaim(AuthSchemas.CiCdClaims.Scope, RepositoryScope.PublishModules.ToScopeClaim()));
 
 
 builder.Services.ConfigureHttpJsonOptions(options =>

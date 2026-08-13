@@ -23,4 +23,14 @@ public sealed class UpsertRepositoryRequest
     [Required(AllowEmptyStrings = false)]
     [MaxLength(128)]
     public required string Repo { get; init; }
+
+    /// <summary>
+    /// What this repository may publish: <c>publish_firmware</c>, <c>publish_modules</c>, or both.
+    /// </summary>
+    /// <remarks>
+    /// Firmware and desktop ingestion share one authentication scheme, so an unscoped grant would let
+    /// a repository onboarded for desktop modules publish firmware too. Omitting this registers the
+    /// repository without letting it publish anything.
+    /// </remarks>
+    public List<string>? Scopes { get; init; }
 }

@@ -114,6 +114,44 @@ public class ReleasesControllerTests
         await Assert.That(response.IsSuccessStatusCode).IsFalse();
     }
 
+    [Test]
+    public async Task Releases_WithOnlyTheModulesScope_AreForbidden()
+    {
+        var seed = await SeedAsync();
+
+        // Firmware and desktop ingestion share the CI/CD scheme, so a repository onboarded purely to
+        // publish desktop modules must not be able to start a firmware release.
+        using var client = Factory.CreateCiCdClient(seed.RepositoryId, scopes: "publish_modules");
+        var response = await client.PostAsJsonAsync("/v2/firmware/releases", new InitReleaseRequest
+        {
+            Version = "1.5.1",
+            Channel = "stable",
+            ReleaseDate = DateTimeOffset.UtcNow,
+            Boards = [BoardName],
+            Changelog = Changelog
+        });
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Forbidden);
+    }
+
+    [Test]
+    public async Task Releases_WithNoScopes_AreForbidden()
+    {
+        var seed = await SeedAsync();
+
+        using var client = Factory.CreateCiCdClient(seed.RepositoryId, scopes: TestCiCdAuthHandler.NoScopes);
+        var response = await client.PostAsJsonAsync("/v2/firmware/releases", new InitReleaseRequest
+        {
+            Version = "1.5.1",
+            Channel = "stable",
+            ReleaseDate = DateTimeOffset.UtcNow,
+            Boards = [BoardName],
+            Changelog = Changelog
+        });
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Forbidden);
+    }
+
     // ---- Immutability (B3) ----
 
     [Test]

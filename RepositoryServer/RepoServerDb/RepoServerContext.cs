@@ -71,6 +71,7 @@ public partial class RepoServerContext : DbContext
         npgsqlBuilder.MapEnum<FirmwareChipArchitecture>("firmware_chip_architecture");
         npgsqlBuilder.MapEnum<ReleaseStatus>("release_status");
         npgsqlBuilder.MapEnum<RepositoryProvider>("repository_provider");
+        npgsqlBuilder.MapEnum<RepositoryScope>("repository_scope");
         npgsqlBuilder.MapEnum<AdvisorySeverity>("advisory_severity");
     }
 
@@ -130,9 +131,14 @@ public partial class RepoServerContext : DbContext
             entity.Property(e => e.Provider).HasColumnName("provider");
             entity.Property(e => e.Owner).HasMaxLength(128).HasColumnName("owner");
             entity.Property(e => e.Repo).HasMaxLength(128).HasColumnName("repo");
+            entity.Property(e => e.Scopes).HasColumnName("scopes");
 
+            // Uniqueness is enforced case-insensitively by a unique index on
+            // (provider, lower(owner), lower(repo)), created in the migration — expression indexes
+            // cannot be declared in the EF model. GitHub treats owner and repo case-insensitively, so
+            // a case-sensitive constraint would let "OpenShock/Firmware" and "openshock/firmware"
+            // exist as separate grants while the OIDC lookup only ever finds one of them.
             entity.HasIndex(e => new { e.Provider, e.Owner, e.Repo })
-                .IsUnique()
                 .HasDatabaseName("ix_repositories_provider_owner_repo");
         });
 

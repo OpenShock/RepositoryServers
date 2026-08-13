@@ -164,6 +164,50 @@ public class RepositoriesAdminControllerTests
     }
 
     [Test]
+    public async Task Put_DifferentCasing_UpdatesTheSameRegistration()
+    {
+        using var client = Factory.CreateAdminClient();
+
+        var first = await client.PutAsJsonAsync(BasePath, new UpsertRepositoryRequest
+        {
+            Provider = "github", Owner = "openshock", Repo = "firmware",
+            Scopes = ["publish_firmware"]
+        });
+        var firstId = (await first.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetString();
+
+        // GitHub treats owner/repo case-insensitively, so this must land on the same grant rather
+        // than creating a second row the OIDC lookup would never reach.
+        var second = await client.PutAsJsonAsync(BasePath, new UpsertRepositoryRequest
+        {
+            Provider = "GitHub", Owner = "OpenShock", Repo = "Firmware",
+            Scopes = ["publish_firmware", "publish_modules"]
+        });
+
+        await Assert.That(second.StatusCode).IsEqualTo(HttpStatusCode.OK);
+        var body = await second.Content.ReadFromJsonAsync<JsonElement>();
+        await Assert.That(body.GetProperty("id").GetString()).IsEqualTo(firstId);
+
+        // And scopes are authoritative on re-registration, so a grant can be widened or narrowed.
+        var scopes = body.GetProperty("scopes").EnumerateArray().Select(e => e.GetString()).ToList();
+        await Assert.That(scopes).Contains("publish_modules");
+
+        var all = await client.GetFromJsonAsync<List<RepositoryDto>>(BasePath);
+        await Assert.That(all!).Count().IsEqualTo(1);
+    }
+
+    [Test]
+    public async Task Put_UnknownScope_Returns400()
+    {
+        using var client = Factory.CreateAdminClient();
+        var response = await client.PutAsJsonAsync(BasePath, new UpsertRepositoryRequest
+        {
+            Provider = "github", Owner = "openshock", Repo = "firmware",
+            Scopes = ["publish_everything"]
+        });
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+    }
+
+    [Test]
     public async Task Put_UnknownProvider_Returns400()
     {
         using var client = Factory.CreateAdminClient();
