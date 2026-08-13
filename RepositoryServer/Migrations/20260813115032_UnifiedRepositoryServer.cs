@@ -21,6 +21,12 @@ namespace OpenShock.RepositoryServer.Migrations
                 .Annotation("Npgsql:Enum:release_status", "aborted,archived,editing,published,staging")
                 .Annotation("Npgsql:Enum:repository_provider", "github");
 
+            migrationBuilder.AddColumn<Guid>(
+                name: "repository_id",
+                table: "modules",
+                type: "uuid",
+                nullable: true);
+
             migrationBuilder.CreateTable(
                 name: "firmware_advisories",
                 columns: table => new
@@ -302,6 +308,11 @@ namespace OpenShock.RepositoryServer.Migrations
                 });
 
             migrationBuilder.CreateIndex(
+                name: "IX_modules_repository_id",
+                table: "modules",
+                column: "repository_id");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_firmware_artifacts_board_id",
                 table: "firmware_artifacts",
                 column: "board_id");
@@ -319,8 +330,7 @@ namespace OpenShock.RepositoryServer.Migrations
             migrationBuilder.CreateIndex(
                 name: "ix_firmware_boards_name",
                 table: "firmware_boards",
-                column: "name",
-                unique: true);
+                column: "name");
 
             migrationBuilder.CreateIndex(
                 name: "IX_firmware_chip_usb_devices_usb_device_id",
@@ -330,8 +340,7 @@ namespace OpenShock.RepositoryServer.Migrations
             migrationBuilder.CreateIndex(
                 name: "ix_firmware_chips_name",
                 table: "firmware_chips",
-                column: "name",
-                unique: true);
+                column: "name");
 
             migrationBuilder.CreateIndex(
                 name: "IX_firmware_releases_repository_id",
@@ -376,11 +385,61 @@ namespace OpenShock.RepositoryServer.Migrations
                 columns: new[] { "vid", "pid" },
                 unique: true)
                 .Annotation("Npgsql:NullsDistinct", false);
+
+            migrationBuilder.AddForeignKey(
+                name: "fk_modules_repository",
+                table: "modules",
+                column: "repository_id",
+                principalTable: "repositories",
+                principalColumn: "id",
+                onDelete: ReferentialAction.Restrict);
+
+            // ---- Indexes the EF model cannot express -------------------------------------------
+            // Expression and partial indexes have no model-builder equivalent, so they are created
+            // here in raw SQL. The corresponding model-level indexes above are deliberately declared
+            // non-unique: the real constraint is the one below.
+
+            // Board and chip names are resolved case-insensitively on the public endpoints. With only
+            // a case-sensitive unique index, "ESP32-Core" and "esp32-core" could coexist and
+            // resolution would silently pick one — the other could never receive an upload, and a hub
+            // compiled with its spelling would be served the other board's firmware, potentially for a
+            // different chip. This also lets the lower(name) lookups use an index rather than a scan.
+            migrationBuilder.Sql(
+                """
+                CREATE UNIQUE INDEX ix_firmware_chips_name_lower
+                    ON firmware_chips (lower(name));
+                """);
+
+            migrationBuilder.Sql(
+                """
+                CREATE UNIQUE INDEX ix_firmware_boards_name_lower
+                    ON firmware_boards (lower(name));
+                """);
+
+            // At most one open release per version. InitRelease guards this with a read-then-insert,
+            // which two concurrent jobs for the same tag both pass; they would then stage into the
+            // same CDN keys and race each other's uploads, producing a permanent hash mismatch for
+            // every OTA client with no error surfaced anywhere.
+            migrationBuilder.Sql(
+                """
+                CREATE UNIQUE INDEX ix_firmware_releases_open_version
+                    ON firmware_releases (version)
+                    WHERE status IN ('staging', 'editing');
+                """);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            // Raw-SQL indexes from Up — dropped first so the tables below come down cleanly.
+            migrationBuilder.Sql("DROP INDEX IF EXISTS ix_firmware_releases_open_version;");
+            migrationBuilder.Sql("DROP INDEX IF EXISTS ix_firmware_boards_name_lower;");
+            migrationBuilder.Sql("DROP INDEX IF EXISTS ix_firmware_chips_name_lower;");
+
+            migrationBuilder.DropForeignKey(
+                name: "fk_modules_repository",
+                table: "modules");
+
             migrationBuilder.DropTable(
                 name: "firmware_advisories");
 
@@ -422,6 +481,14 @@ namespace OpenShock.RepositoryServer.Migrations
 
             migrationBuilder.DropTable(
                 name: "repositories");
+
+            migrationBuilder.DropIndex(
+                name: "IX_modules_repository_id",
+                table: "modules");
+
+            migrationBuilder.DropColumn(
+                name: "repository_id",
+                table: "modules");
 
             migrationBuilder.AlterDatabase()
                 .OldAnnotation("Npgsql:Enum:advisory_severity", "critical,info,warning")

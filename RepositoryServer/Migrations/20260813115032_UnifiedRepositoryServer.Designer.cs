@@ -13,7 +13,7 @@ using OpenShock.RepositoryServer.RepoServerDb;
 namespace OpenShock.RepositoryServer.Migrations
 {
     [DbContext(typeof(MigrationOpenShockContext))]
-    [Migration("20260804112228_UnifiedRepositoryServer")]
+    [Migration("20260813115032_UnifiedRepositoryServer")]
     partial class UnifiedRepositoryServer
     {
         /// <inheritdoc />
@@ -21,7 +21,7 @@ namespace OpenShock.RepositoryServer.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.2")
+                .HasAnnotation("ProductVersion", "10.0.10")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "advisory_severity", new[] { "critical", "info", "warning" });
@@ -138,7 +138,6 @@ namespace OpenShock.RepositoryServer.Migrations
                     b.HasIndex("ChipId");
 
                     b.HasIndex("Name")
-                        .IsUnique()
                         .HasDatabaseName("ix_firmware_boards_name");
 
                     b.ToTable("firmware_boards", (string)null);
@@ -183,7 +182,6 @@ namespace OpenShock.RepositoryServer.Migrations
                         .HasName("firmware_chips_pkey");
 
                     b.HasIndex("Name")
-                        .IsUnique()
                         .HasDatabaseName("ix_firmware_chips_name");
 
                     b.ToTable("firmware_chips", (string)null);
@@ -434,6 +432,10 @@ namespace OpenShock.RepositoryServer.Migrations
                         .HasColumnType("character varying(128)")
                         .HasColumnName("name");
 
+                    b.Property<Guid?>("RepositoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("repository_id");
+
                     b.Property<string>("SourceUrl")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
@@ -441,6 +443,8 @@ namespace OpenShock.RepositoryServer.Migrations
 
                     b.HasKey("Id")
                         .HasName("modules_pkey");
+
+                    b.HasIndex("RepositoryId");
 
                     b.ToTable("modules", (string)null);
                 });
@@ -713,6 +717,17 @@ namespace OpenShock.RepositoryServer.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_firmware_versions_repository");
+
+                    b.Navigation("RepositoryNavigation");
+                });
+
+            modelBuilder.Entity("OpenShock.RepositoryServer.RepoServerDb.Module", b =>
+                {
+                    b.HasOne("OpenShock.RepositoryServer.RepoServerDb.SourceRepository", "RepositoryNavigation")
+                        .WithMany()
+                        .HasForeignKey("RepositoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_modules_repository");
 
                     b.Navigation("RepositoryNavigation");
                 });
