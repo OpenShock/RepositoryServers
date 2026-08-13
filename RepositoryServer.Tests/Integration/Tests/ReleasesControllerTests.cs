@@ -39,12 +39,12 @@ public class ReleasesControllerTests
         var upload = await UploadArtifactsAsync(client, releaseId, BoardName);
         await Assert.That(upload.StatusCode).IsEqualTo(HttpStatusCode.OK);
 
-        var publish = await client.PostAsync($"/v2/firmware/releases/{releaseId}/publish", null);
+        var publish = await client.PostAsync($"/2/firmware/releases/{releaseId}/publish", null);
         await Assert.That(publish.IsSuccessStatusCode).IsTrue();
 
         // Once published it must be visible on the public read path.
         using var anon = Factory.CreateClient();
-        var latest = await anon.GetFromJsonAsync<JsonElement>("/v2/firmware/latest/stable");
+        var latest = await anon.GetFromJsonAsync<JsonElement>("/2/firmware/latest/stable");
         await Assert.That(latest.GetProperty("version").GetString()).IsEqualTo("1.5.1");
     }
 
@@ -78,7 +78,7 @@ public class ReleasesControllerTests
 
         // Publishing someone else's release would attribute it to their repository and commit hash.
         using var intruder = Factory.CreateCiCdClient(intruderId);
-        var response = await intruder.PostAsync($"/v2/firmware/releases/{releaseId}/publish", null);
+        var response = await intruder.PostAsync($"/2/firmware/releases/{releaseId}/publish", null);
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Forbidden);
     }
 
@@ -92,7 +92,7 @@ public class ReleasesControllerTests
         var releaseId = await InitReleaseAsync(owner, "1.5.1");
 
         using var intruder = Factory.CreateCiCdClient(intruderId);
-        var response = await intruder.DeleteAsync($"/v2/firmware/releases/{releaseId}");
+        var response = await intruder.DeleteAsync($"/2/firmware/releases/{releaseId}");
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Forbidden);
     }
 
@@ -102,7 +102,7 @@ public class ReleasesControllerTests
         await SeedAsync();
 
         using var anon = Factory.CreateClient();
-        var response = await anon.PostAsJsonAsync("/v2/firmware/releases", new InitReleaseRequest
+        var response = await anon.PostAsJsonAsync("/2/firmware/releases", new InitReleaseRequest
         {
             Version = "1.5.1",
             Channel = "stable",
@@ -122,7 +122,7 @@ public class ReleasesControllerTests
         // Firmware and desktop ingestion share the CI/CD scheme, so a repository onboarded purely to
         // publish desktop modules must not be able to start a firmware release.
         using var client = Factory.CreateCiCdClient(seed.RepositoryId, scopes: "publish_modules");
-        var response = await client.PostAsJsonAsync("/v2/firmware/releases", new InitReleaseRequest
+        var response = await client.PostAsJsonAsync("/2/firmware/releases", new InitReleaseRequest
         {
             Version = "1.5.1",
             Channel = "stable",
@@ -140,7 +140,7 @@ public class ReleasesControllerTests
         var seed = await SeedAsync();
 
         using var client = Factory.CreateCiCdClient(seed.RepositoryId, scopes: TestCiCdAuthHandler.NoScopes);
-        var response = await client.PostAsJsonAsync("/v2/firmware/releases", new InitReleaseRequest
+        var response = await client.PostAsJsonAsync("/2/firmware/releases", new InitReleaseRequest
         {
             Version = "1.5.1",
             Channel = "stable",
@@ -162,11 +162,11 @@ public class ReleasesControllerTests
 
         var releaseId = await InitReleaseAsync(client, "1.5.1");
         await UploadArtifactsAsync(client, releaseId, BoardName);
-        await client.PostAsync($"/v2/firmware/releases/{releaseId}/publish", null);
+        await client.PostAsync($"/2/firmware/releases/{releaseId}/publish", null);
 
         // Re-initialising a published version would let a second release overwrite live artifacts at
         // the same storage keys, and if abandoned, have them deleted by the TTL job.
-        var response = await client.PostAsJsonAsync("/v2/firmware/releases", new InitReleaseRequest
+        var response = await client.PostAsJsonAsync("/2/firmware/releases", new InitReleaseRequest
         {
             Version = "1.5.1",
             Channel = "stable",
@@ -186,7 +186,7 @@ public class ReleasesControllerTests
 
         await InitReleaseAsync(client, "1.5.1");
 
-        var response = await client.PostAsJsonAsync("/v2/firmware/releases", new InitReleaseRequest
+        var response = await client.PostAsJsonAsync("/2/firmware/releases", new InitReleaseRequest
         {
             Version = "1.5.1",
             Channel = "stable",
@@ -206,7 +206,7 @@ public class ReleasesControllerTests
         var seed = await SeedAsync();
         using var client = Factory.CreateCiCdClient(seed.RepositoryId);
 
-        var response = await client.PostAsJsonAsync("/v2/firmware/releases", new InitReleaseRequest
+        var response = await client.PostAsJsonAsync("/2/firmware/releases", new InitReleaseRequest
         {
             Version = "1.5.1",
             Channel = "stable",
@@ -228,7 +228,7 @@ public class ReleasesControllerTests
         var seed = await SeedAsync();
         using var client = Factory.CreateCiCdClient(seed.RepositoryId);
 
-        var response = await client.PostAsJsonAsync("/v2/firmware/releases", new InitReleaseRequest
+        var response = await client.PostAsJsonAsync("/2/firmware/releases", new InitReleaseRequest
         {
             Version = "1.5.1",
             Channel = "stable",
@@ -246,7 +246,7 @@ public class ReleasesControllerTests
         var seed = await SeedAsync();
         using var client = Factory.CreateCiCdClient(seed.RepositoryId);
 
-        var response = await client.PostAsJsonAsync("/v2/firmware/releases?nofail", new InitReleaseRequest
+        var response = await client.PostAsJsonAsync("/2/firmware/releases?nofail", new InitReleaseRequest
         {
             Version = "1.5.1",
             Channel = "stable",
@@ -266,7 +266,7 @@ public class ReleasesControllerTests
         var seed = await SeedAsync();
         using var client = Factory.CreateCiCdClient(seed.RepositoryId);
 
-        var init = await client.PostAsJsonAsync("/v2/firmware/releases?nofail", new InitReleaseRequest
+        var init = await client.PostAsJsonAsync("/2/firmware/releases?nofail", new InitReleaseRequest
         {
             Version = "1.5.1",
             Channel = "stable",
@@ -278,7 +278,7 @@ public class ReleasesControllerTests
 
         await UploadArtifactsAsync(client, releaseId, BoardName);
 
-        var publish = await client.PostAsync($"/v2/firmware/releases/{releaseId}/publish", null);
+        var publish = await client.PostAsync($"/2/firmware/releases/{releaseId}/publish", null);
         await Assert.That(publish.StatusCode).IsEqualTo(HttpStatusCode.Conflict);
     }
 
@@ -288,7 +288,7 @@ public class ReleasesControllerTests
         var seed = await SeedAsync(extraBoardName: "Wemos-Lolin-S3");
         using var client = Factory.CreateCiCdClient(seed.RepositoryId);
 
-        var init = await client.PostAsJsonAsync("/v2/firmware/releases", new InitReleaseRequest
+        var init = await client.PostAsJsonAsync("/2/firmware/releases", new InitReleaseRequest
         {
             Version = "1.5.1",
             Channel = "stable",
@@ -300,7 +300,7 @@ public class ReleasesControllerTests
 
         await UploadArtifactsAsync(client, releaseId, BoardName);
 
-        var publish = await client.PostAsync($"/v2/firmware/releases/{releaseId}/publish", null);
+        var publish = await client.PostAsync($"/2/firmware/releases/{releaseId}/publish", null);
         await Assert.That(publish.IsSuccessStatusCode).IsFalse();
 
         var body = await publish.Content.ReadAsStringAsync();
@@ -323,7 +323,7 @@ public class ReleasesControllerTests
             "sha256");
 
         var response = await client.PutAsync(
-            $"/v2/firmware/releases/{releaseId}/boards/{BoardName}", content);
+            $"/2/firmware/releases/{releaseId}/boards/{BoardName}", content);
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
     }
@@ -346,10 +346,10 @@ public class ReleasesControllerTests
         using var client = Factory.CreateCiCdClient(seed.RepositoryId);
         var releaseId = await InitReleaseAsync(client, "1.5.1");
 
-        var abort = await client.DeleteAsync($"/v2/firmware/releases/{releaseId}");
+        var abort = await client.DeleteAsync($"/2/firmware/releases/{releaseId}");
         await Assert.That(abort.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
 
-        var publish = await client.PostAsync($"/v2/firmware/releases/{releaseId}/publish", null);
+        var publish = await client.PostAsync($"/2/firmware/releases/{releaseId}/publish", null);
         await Assert.That(publish.IsSuccessStatusCode).IsFalse();
     }
 
@@ -378,7 +378,7 @@ public class ReleasesControllerTests
         })), "sha256");
 
         var response = await client.PutAsync(
-            $"/v2/firmware/releases/{releaseId}/boards/{BoardName}", content);
+            $"/2/firmware/releases/{releaseId}/boards/{BoardName}", content);
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
 
         // The prior staged artifact must survive: nothing is deleted or written until every file in
@@ -398,7 +398,7 @@ public class ReleasesControllerTests
 
         // Npgsql rejects a non-zero offset for `timestamp with time zone`, which used to surface as a
         // generic 500 for any CI runner outside UTC.
-        var response = await client.PostAsJsonAsync("/v2/firmware/releases", new InitReleaseRequest
+        var response = await client.PostAsJsonAsync("/2/firmware/releases", new InitReleaseRequest
         {
             Version = "1.5.1",
             Channel = "stable",
@@ -434,7 +434,7 @@ public class ReleasesControllerTests
         var releaseId = await InitReleaseAsync(client, "1.5.1");
         await UploadArtifactsAsync(client, releaseId, BoardName);
 
-        var publish = await client.PostAsync($"/v2/firmware/releases/{releaseId}/publish", null);
+        var publish = await client.PostAsync($"/2/firmware/releases/{releaseId}/publish", null);
         await Assert.That(publish.IsSuccessStatusCode).IsTrue();
 
         await Assert.That(Factory.StoredFileExists($"1.5.1/{seed.BoardId}/firmware.bin")).IsTrue();
@@ -452,12 +452,12 @@ public class ReleasesControllerTests
         // Publish 1.5.1 so there are live artifacts on disk to protect.
         var publishedId = await InitReleaseAsync(client, "1.5.1");
         await UploadArtifactsAsync(client, publishedId, BoardName);
-        await client.PostAsync($"/v2/firmware/releases/{publishedId}/publish", null);
+        await client.PostAsync($"/2/firmware/releases/{publishedId}/publish", null);
 
         // A second, unrelated release is staged and then aborted.
         var abortedId = await InitReleaseAsync(client, "1.6.0");
         await UploadArtifactsAsync(client, abortedId, BoardName);
-        var abort = await client.DeleteAsync($"/v2/firmware/releases/{abortedId}");
+        var abort = await client.DeleteAsync($"/2/firmware/releases/{abortedId}");
         await Assert.That(abort.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
 
         await Assert.That(Factory.StoredFileExists($"_staging/{abortedId}/{seed.BoardId}/firmware.bin")).IsFalse();
@@ -532,7 +532,7 @@ public class ReleasesControllerTests
 
     private static async Task<Guid> InitReleaseAsync(HttpClient client, string version)
     {
-        var response = await client.PostAsJsonAsync("/v2/firmware/releases", new InitReleaseRequest
+        var response = await client.PostAsJsonAsync("/2/firmware/releases", new InitReleaseRequest
         {
             Version = version,
             Channel = "stable",
@@ -558,6 +558,6 @@ public class ReleasesControllerTests
             JsonSerializer.Serialize(new Dictionary<string, string> { ["merged"] = hash })),
             "sha256");
 
-        return await client.PutAsync($"/v2/firmware/releases/{releaseId}/boards/{board}", content);
+        return await client.PutAsync($"/2/firmware/releases/{releaseId}/boards/{board}", content);
     }
 }

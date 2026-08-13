@@ -9,7 +9,7 @@ namespace OpenShock.RepositoryServer.Tests.Integration.Tests;
 [NotInParallel("repo-server-integration")]
 public class UsbDevicesAdminControllerTests
 {
-    private const string BasePath = "/v2/firmware/admin/usb-devices";
+    private const string BasePath = "/2/firmware/admin/usb-devices";
 
     [ClassDataSource<WebApplicationFactory>(Shared = SharedType.PerTestSession)]
     public required WebApplicationFactory Factory { get; init; }

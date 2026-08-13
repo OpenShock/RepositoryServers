@@ -12,7 +12,7 @@ namespace OpenShock.RepositoryServer.Controllers.V2.Firmware.Admin;
 
 [ApiVersion("2.0")]
 [ApiController]
-[Route("/v{version:apiVersion}/firmware/admin/releases")]
+[Route("/{version:apiVersion}/firmware/admin/releases")]
 [Authorize(AuthenticationSchemes = AuthSchemas.AdminToken)]
 public class ReleasesAdminController : OpenShockControllerBase
 {

@@ -14,7 +14,7 @@ namespace OpenShock.RepositoryServer.Controllers.V1;
 
 [ApiVersion("1.0")]
 [ApiController]
-[Route("/v{version:apiVersion}/")]
+[Route("/{version:apiVersion}/")]
 public sealed class RepoController : OpenShockControllerBase
 {
     private readonly RepoServerContext _db;

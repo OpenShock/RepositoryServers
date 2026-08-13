@@ -8,7 +8,7 @@ Unified repository server for distributing OpenShock desktop app modules and fir
 - PostgreSQL via Npgsql + EF Core (with DbContext pooling)
 - Serilog (console + Grafana Loki)
 - OpenTelemetry (Prometheus exporter)
-- API Versioning (Asp.Versioning) — URL-based: `/v1/`, `/v2/firmware/`
+- API Versioning (Asp.Versioning) — URL-based: `/1/`, `/2/firmware/`
 - FlexLabs.EntityFrameworkCore.Upsert for upserts
 - MiniValidation for config validation
 - Semver NuGet package for semver parsing
@@ -29,25 +29,25 @@ RepositoryServer/                    # Main web API project
   Controllers/
     OpenShockControllerBase.cs       # Shared base controller
     V1/                              # Desktop module endpoints (V1)
-      RepoController.cs              # GET /v1/ — desktop module manifest
-      AdminController.cs             # /v1/admin/... — desktop module CRUD
-      CiCdController.cs              # PUT /v1/cicd/modules/{id}/versions/{v} — desktop zip upload
+      RepoController.cs              # GET /1/ — desktop module manifest
+      AdminController.cs             # /1/admin/... — desktop module CRUD
+      CiCdController.cs              # PUT /1/cicd/modules/{id}/versions/{v} — desktop zip upload
     V2/Firmware/                     # Firmware V2 endpoints
-      ManifestController.cs          # GET /v2/firmware/manifest (bootstrap payload)
-      LatestController.cs            # GET /v2/firmware/latest/{channel}[/{board}?version=]
-      VersionsController.cs          # GET /v2/firmware/versions[/{version}[/{board}]]
-      BoardsController.cs            # GET /v2/firmware/boards
-      ChipsController.cs             # GET /v2/firmware/chips
-      ReleasesController.cs          # POST/PUT/DELETE /v2/firmware/releases/... (CI/CD ingestion)
+      ManifestController.cs          # GET /2/firmware/manifest (bootstrap payload)
+      LatestController.cs            # GET /2/firmware/latest/{channel}[/{board}?version=]
+      VersionsController.cs          # GET /2/firmware/versions[/{version}[/{board}]]
+      BoardsController.cs            # GET /2/firmware/boards
+      ChipsController.cs             # GET /2/firmware/chips
+      ReleasesController.cs          # POST/PUT/DELETE /2/firmware/releases/... (CI/CD ingestion)
       Admin/                         # AdminToken-protected CRUD (split by concern)
-        RepositoriesController.cs    # GET, DELETE /v2/firmware/admin/repositories
-        VersionsAdminController.cs   # DELETE /v2/firmware/admin/versions/{v}
-        BoardsAdminController.cs     # PUT, PATCH, DELETE /v2/firmware/admin/boards/{id}
+        RepositoriesController.cs    # GET, DELETE /2/firmware/admin/repositories
+        VersionsAdminController.cs   # DELETE /2/firmware/admin/versions/{v}
+        BoardsAdminController.cs     # PUT, PATCH, DELETE /2/firmware/admin/boards/{id}
                                      # + USB attach/detach
-        ChipsAdminController.cs      # PUT, DELETE /v2/firmware/admin/chips/{id} + USB attach/detach
-        ReleasesAdminController.cs   # PUT /v2/firmware/admin/releases/{id}/changelog (fix)
-        UsbDevicesController.cs      # PUT/GET/DELETE /v2/firmware/admin/usb-devices
-        UsbSerialFiltersController.cs # PUT/GET/DELETE /v2/firmware/admin/usb-serial-filters
+        ChipsAdminController.cs      # PUT, DELETE /2/firmware/admin/chips/{id} + USB attach/detach
+        ReleasesAdminController.cs   # PUT /2/firmware/admin/releases/{id}/changelog (fix)
+        UsbDevicesController.cs      # PUT/GET/DELETE /2/firmware/admin/usb-devices
+        UsbSerialFiltersController.cs # PUT/GET/DELETE /2/firmware/admin/usb-serial-filters
   Enums/                             # ReleaseChannel, FirmwareArtifactType, FirmwareChipArchitecture,
                                      # ReleaseNoteSectionType, ReleaseStatus, RepositoryProvider
   Errors/                            # AuthResultError, ExceptionError
@@ -97,7 +97,7 @@ docker/
   validates a GitHub Actions OIDC JWT, then looks up a matching row in the `repositories`
   table and attaches `AuthSchemas.CiCdClaims` to the principal. **Unregistered repositories are
   rejected** — the table is the publish allowlist, and a valid OIDC token alone says nothing about
-  which repo is calling. Onboarding is `PUT /v2/firmware/admin/repositories` (admin token).
+  which repo is calling. Onboarding is `PUT /2/firmware/admin/repositories` (admin token).
   Authorization does not stop there: release upload/publish/abort each re-check that the release
   belongs to the calling repository, and desktop modules carry an owning `repository_id`.
 - **Error Handling**: `OpenShockProblem` base class → `ToObjectResult()` for RFC 7807
@@ -113,7 +113,7 @@ docker/
 - **Metrics**: Prometheus at `/metrics`, restricted to private networks
 - **Notifications**: Fire-and-forget Discord webhooks via `IDiscordNotificationService`.
   Targets live in the `discord_webhooks` table, each subscribing to specific events, managed via
-  `/v2/admin/discord-webhooks`. The URL is a credential so it is write-only — responses return a
+  `/2/admin/discord-webhooks`. The URL is a credential so it is write-only — responses return a
   masked form. The service is a **singleton** that resolves its own `HttpClient` and `DbContext`:
   notifications outlive the request that triggers them, so capturing request-scoped ones dropped
   them non-deterministically. No subscribed webhooks → no-op.

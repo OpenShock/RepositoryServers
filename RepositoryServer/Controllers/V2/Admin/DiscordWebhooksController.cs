@@ -23,7 +23,7 @@ namespace OpenShock.RepositoryServer.Controllers.V2.Admin;
 /// </remarks>
 [ApiVersion("2.0")]
 [ApiController]
-[Route("/v{version:apiVersion}/admin/discord-webhooks")]
+[Route("/{version:apiVersion}/admin/discord-webhooks")]
 [Authorize(AuthenticationSchemes = AuthSchemas.AdminToken)]
 public class DiscordWebhooksController : OpenShockControllerBase
 {

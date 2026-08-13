@@ -10,7 +10,7 @@ namespace OpenShock.RepositoryServer.Controllers.V2.Firmware;
 
 [ApiVersion("2.0")]
 [ApiController]
-[Route("/v{version:apiVersion}/firmware/manifest")]
+[Route("/{version:apiVersion}/firmware/manifest")]
 public sealed class ManifestController : OpenShockControllerBase
 {
     private static readonly ReleaseChannel[] AllChannels =

@@ -129,7 +129,7 @@ public class DesktopCiCdControllerTests
         var content = new MultipartFormDataContent();
         content.Add(new ByteArrayContent(BuildModuleZip()), "zip", "module.zip");
 
-        return await client.PutAsync($"/v1/cicd/modules/{ModuleId}/versions/{version}", content);
+        return await client.PutAsync($"/1/cicd/modules/{ModuleId}/versions/{version}", content);
     }
 
     /// <summary>Minimal zip passing the controller's root-entry validation (.dll/.pdb/.json only).</summary>

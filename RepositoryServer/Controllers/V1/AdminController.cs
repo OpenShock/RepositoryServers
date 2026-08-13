@@ -13,7 +13,7 @@ namespace OpenShock.RepositoryServer.Controllers.V1;
 
 [ApiVersion("1.0")]
 [ApiController]
-[Route("/v{version:apiVersion}/admin")]
+[Route("/{version:apiVersion}/admin")]
 [Authorize(AuthenticationSchemes = AuthSchemas.AdminToken)]
 public class AdminController : OpenShockControllerBase
 {

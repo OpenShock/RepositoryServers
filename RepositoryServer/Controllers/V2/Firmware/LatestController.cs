@@ -12,7 +12,7 @@ namespace OpenShock.RepositoryServer.Controllers.V2.Firmware;
 
 [ApiVersion("2.0")]
 [ApiController]
-[Route("/v{version:apiVersion}/firmware/latest")]
+[Route("/{version:apiVersion}/firmware/latest")]
 public sealed class LatestController : OpenShockControllerBase
 {
     private readonly RepoServerContext _db;

@@ -23,7 +23,7 @@ public class LatestControllerTests
     public async Task GetLatest_InvalidChannel_Returns400()
     {
         using var client = Factory.CreateClient();
-        var response = await client.GetAsync("/v2/firmware/latest/nightly");
+        var response = await client.GetAsync("/2/firmware/latest/nightly");
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
     }
 
@@ -31,7 +31,7 @@ public class LatestControllerTests
     public async Task GetLatest_ChannelWithNoReleases_Returns404()
     {
         using var client = Factory.CreateClient();
-        var response = await client.GetAsync("/v2/firmware/latest/stable");
+        var response = await client.GetAsync("/2/firmware/latest/stable");
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
     }
 
@@ -41,7 +41,7 @@ public class LatestControllerTests
         var (boardId, _, _) = await SeedReleaseAsync("1.5.1", ReleaseChannel.Stable);
 
         using var client = Factory.CreateClient();
-        var response = await client.GetAsync("/v2/firmware/latest/stable");
+        var response = await client.GetAsync("/2/firmware/latest/stable");
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -63,7 +63,7 @@ public class LatestControllerTests
     public async Task GetLatestForBoard_UnknownChannel_Returns400()
     {
         using var client = Factory.CreateClient();
-        var response = await client.GetAsync($"/v2/firmware/latest/nightly/{Guid.NewGuid()}");
+        var response = await client.GetAsync($"/2/firmware/latest/nightly/{Guid.NewGuid()}");
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
     }
 
@@ -71,7 +71,7 @@ public class LatestControllerTests
     public async Task GetLatestForBoard_NoReleases_Returns404()
     {
         using var client = Factory.CreateClient();
-        var response = await client.GetAsync($"/v2/firmware/latest/stable/{Guid.NewGuid()}");
+        var response = await client.GetAsync($"/2/firmware/latest/stable/{Guid.NewGuid()}");
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
     }
 
@@ -81,7 +81,7 @@ public class LatestControllerTests
         var (boardId, _, _) = await SeedReleaseAsync("1.5.1", ReleaseChannel.Stable);
 
         using var client = Factory.CreateClient();
-        var response = await client.GetAsync($"/v2/firmware/latest/stable/{boardId}?version=1.5.1");
+        var response = await client.GetAsync($"/2/firmware/latest/stable/{boardId}?version=1.5.1");
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
     }
 
@@ -91,7 +91,7 @@ public class LatestControllerTests
         var (boardId, _, _) = await SeedReleaseAsync("1.5.1", ReleaseChannel.Stable);
 
         using var client = Factory.CreateClient();
-        var response = await client.GetAsync($"/v2/firmware/latest/stable/{boardId}?version=1.4.0");
+        var response = await client.GetAsync($"/2/firmware/latest/stable/{boardId}?version=1.4.0");
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -106,7 +106,7 @@ public class LatestControllerTests
         var (boardId, _, _) = await SeedReleaseAsync("1.5.1", ReleaseChannel.Stable);
 
         using var client = Factory.CreateClient();
-        var response = await client.GetAsync($"/v2/firmware/latest/stable/{boardId}");
+        var response = await client.GetAsync($"/2/firmware/latest/stable/{boardId}");
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
     }
 
@@ -116,7 +116,7 @@ public class LatestControllerTests
         await SeedReleaseAsync("1.5.1", ReleaseChannel.Stable);
 
         using var client = Factory.CreateClient();
-        var response = await client.GetAsync($"/v2/firmware/latest/stable/{BoardName}?version=1.4.0");
+        var response = await client.GetAsync($"/2/firmware/latest/stable/{BoardName}?version=1.4.0");
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -130,7 +130,7 @@ public class LatestControllerTests
 
         using var client = Factory.CreateClient();
         var response = await client.GetAsync(
-            $"/v2/firmware/latest/stable/{BoardName.ToLowerInvariant()}?version=1.4.0");
+            $"/2/firmware/latest/stable/{BoardName.ToLowerInvariant()}?version=1.4.0");
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
 
         // The canonical stored spelling comes back, not what the caller sent.
@@ -144,7 +144,7 @@ public class LatestControllerTests
         await SeedReleaseAsync("1.5.1", ReleaseChannel.Stable);
 
         using var client = Factory.CreateClient();
-        var response = await client.GetAsync($"/v2/firmware/latest/stable/{BoardName}?version=1.5.1");
+        var response = await client.GetAsync($"/2/firmware/latest/stable/{BoardName}?version=1.5.1");
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NoContent);
     }
 
@@ -155,7 +155,7 @@ public class LatestControllerTests
 
         using var client = Factory.CreateClient();
         var body = await client.GetFromJsonAsync<JsonElement>(
-            $"/v2/firmware/latest/stable/{BoardName}");
+            $"/2/firmware/latest/stable/{BoardName}");
 
         // Storage paths are keyed by the board id so a rename cannot strand published artifacts,
         // while the response still labels the board by name.
@@ -173,7 +173,7 @@ public class LatestControllerTests
         // An unknown board must not be masked as "already up to date" just because the
         // version query happens to match the latest release.
         using var client = Factory.CreateClient();
-        var response = await client.GetAsync("/v2/firmware/latest/stable/No-Such-Board?version=1.5.1");
+        var response = await client.GetAsync("/2/firmware/latest/stable/No-Such-Board?version=1.5.1");
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
     }
 
@@ -183,7 +183,7 @@ public class LatestControllerTests
         await SeedReleaseAsync("1.5.1", ReleaseChannel.Stable);
 
         using var client = Factory.CreateClient();
-        var response = await client.GetAsync($"/v2/firmware/latest/stable/{Guid.NewGuid()}");
+        var response = await client.GetAsync($"/2/firmware/latest/stable/{Guid.NewGuid()}");
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
     }
 
@@ -197,7 +197,7 @@ public class LatestControllerTests
         await AddVersionAsync("1.5.0", ReleaseChannel.Stable, DateTimeOffset.UtcNow, repoId);
 
         using var client = Factory.CreateClient();
-        var body = await client.GetFromJsonAsync<JsonElement>("/v2/firmware/latest/beta");
+        var body = await client.GetFromJsonAsync<JsonElement>("/2/firmware/latest/beta");
         await Assert.That(body.GetProperty("version").GetString()).IsEqualTo("1.5.0");
     }
 
@@ -209,7 +209,7 @@ public class LatestControllerTests
         await AddVersionAsync("1.6.0-beta.1", ReleaseChannel.Beta, DateTimeOffset.UtcNow.AddDays(1), repoId);
 
         using var client = Factory.CreateClient();
-        var body = await client.GetFromJsonAsync<JsonElement>("/v2/firmware/latest/stable");
+        var body = await client.GetFromJsonAsync<JsonElement>("/2/firmware/latest/stable");
         await Assert.That(body.GetProperty("version").GetString()).IsEqualTo("1.5.0");
     }
 
@@ -225,19 +225,19 @@ public class LatestControllerTests
 
         using var client = Factory.CreateClient();
 
-        var first = await client.GetFromJsonAsync<JsonElement>("/v2/firmware/latest/stable");
+        var first = await client.GetFromJsonAsync<JsonElement>("/2/firmware/latest/stable");
         var picked = first.GetProperty("version").GetString();
         await Assert.That(picked).IsEqualTo("1.5.2");
 
         // Stable across repeated calls...
         for (var i = 0; i < 3; i++)
         {
-            var again = await client.GetFromJsonAsync<JsonElement>("/v2/firmware/latest/stable");
+            var again = await client.GetFromJsonAsync<JsonElement>("/2/firmware/latest/stable");
             await Assert.That(again.GetProperty("version").GetString()).IsEqualTo(picked);
         }
 
         // ...and consistent with the manifest, which computes latest independently.
-        var manifest = await client.GetFromJsonAsync<JsonElement>("/v2/firmware/manifest");
+        var manifest = await client.GetFromJsonAsync<JsonElement>("/2/firmware/manifest");
         await Assert.That(manifest.GetProperty("latest").GetProperty("stable").GetString())
             .IsEqualTo(picked);
     }

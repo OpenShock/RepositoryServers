@@ -12,7 +12,7 @@ namespace OpenShock.RepositoryServer.Controllers.V2.Firmware;
 
 [ApiVersion("2.0")]
 [ApiController]
-[Route("/v{version:apiVersion}/firmware/versions")]
+[Route("/{version:apiVersion}/firmware/versions")]
 public sealed class VersionsController : OpenShockControllerBase
 {
     private const int DefaultLimit = 20;

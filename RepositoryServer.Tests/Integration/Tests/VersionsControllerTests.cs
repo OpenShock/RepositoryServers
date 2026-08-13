@@ -22,7 +22,7 @@ public class VersionsControllerTests
     public async Task List_EmptyDatabase_ReturnsZeroTotal()
     {
         using var client = Factory.CreateClient();
-        var response = await client.GetAsync("/v2/firmware/versions");
+        var response = await client.GetAsync("/2/firmware/versions");
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
 
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -38,7 +38,7 @@ public class VersionsControllerTests
                                 ("1.5.2-beta.1", ReleaseChannel.Beta, DateTimeOffset.UtcNow));
 
         using var client = Factory.CreateClient();
-        var body = await client.GetFromJsonAsync<JsonElement>("/v2/firmware/versions");
+        var body = await client.GetFromJsonAsync<JsonElement>("/2/firmware/versions");
 
         await Assert.That(body.GetProperty("total").GetInt32()).IsEqualTo(3);
         var versions = body.GetProperty("versions").EnumerateArray()
@@ -56,7 +56,7 @@ public class VersionsControllerTests
             ("1.6.0-beta.1", ReleaseChannel.Beta, DateTimeOffset.UtcNow.AddDays(-1)));
 
         using var client = Factory.CreateClient();
-        var body = await client.GetFromJsonAsync<JsonElement>("/v2/firmware/versions?channel=stable");
+        var body = await client.GetFromJsonAsync<JsonElement>("/2/firmware/versions?channel=stable");
 
         await Assert.That(body.GetProperty("total").GetInt32()).IsEqualTo(1);
         var versions = body.GetProperty("versions").EnumerateArray()
@@ -69,7 +69,7 @@ public class VersionsControllerTests
     public async Task List_InvalidChannel_Returns400()
     {
         using var client = Factory.CreateClient();
-        var response = await client.GetAsync("/v2/firmware/versions?channel=nightly");
+        var response = await client.GetAsync("/2/firmware/versions?channel=nightly");
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
     }
 
@@ -84,14 +84,14 @@ public class VersionsControllerTests
             ("1.4.0", ReleaseChannel.Stable, DateTimeOffset.UtcNow.AddDays(-1)));
 
         using var client = Factory.CreateClient();
-        var page1 = await client.GetFromJsonAsync<JsonElement>("/v2/firmware/versions?limit=2&offset=0");
+        var page1 = await client.GetFromJsonAsync<JsonElement>("/2/firmware/versions?limit=2&offset=0");
         await Assert.That(page1.GetProperty("total").GetInt32()).IsEqualTo(5);
         await Assert.That(page1.GetProperty("versions").GetArrayLength()).IsEqualTo(2);
 
-        var page2 = await client.GetFromJsonAsync<JsonElement>("/v2/firmware/versions?limit=2&offset=2");
+        var page2 = await client.GetFromJsonAsync<JsonElement>("/2/firmware/versions?limit=2&offset=2");
         await Assert.That(page2.GetProperty("versions").GetArrayLength()).IsEqualTo(2);
 
-        var page3 = await client.GetFromJsonAsync<JsonElement>("/v2/firmware/versions?limit=2&offset=4");
+        var page3 = await client.GetFromJsonAsync<JsonElement>("/2/firmware/versions?limit=2&offset=4");
         await Assert.That(page3.GetProperty("versions").GetArrayLength()).IsEqualTo(1);
 
         var firstPageVersions = page1.GetProperty("versions").EnumerateArray()
@@ -105,7 +105,7 @@ public class VersionsControllerTests
     public async Task GetVersion_Unknown_Returns404()
     {
         using var client = Factory.CreateClient();
-        var response = await client.GetAsync("/v2/firmware/versions/9.9.9");
+        var response = await client.GetAsync("/2/firmware/versions/9.9.9");
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
     }
 
@@ -115,7 +115,7 @@ public class VersionsControllerTests
         var boardId = await SeedVersionWithNotesAsync("1.5.1");
 
         using var client = Factory.CreateClient();
-        var body = await client.GetFromJsonAsync<JsonElement>("/v2/firmware/versions/1.5.1");
+        var body = await client.GetFromJsonAsync<JsonElement>("/2/firmware/versions/1.5.1");
         await Assert.That(body.GetProperty("version").GetString()).IsEqualTo("1.5.1");
         await Assert.That(body.GetProperty("releaseNotes").GetArrayLength()).IsEqualTo(2);
 
@@ -130,7 +130,7 @@ public class VersionsControllerTests
         await SeedVersionWithNotesAsync("1.5.1");
 
         using var client = Factory.CreateClient();
-        var response = await client.GetAsync("/v2/firmware/versions/1.5.1");
+        var response = await client.GetAsync("/2/firmware/versions/1.5.1");
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
         await Assert.That(response.Headers.CacheControl).IsNotNull();
@@ -142,7 +142,7 @@ public class VersionsControllerTests
     public async Task GetVersionForBoard_UnknownVersion_Returns404()
     {
         using var client = Factory.CreateClient();
-        var response = await client.GetAsync($"/v2/firmware/versions/9.9.9/{Guid.NewGuid()}");
+        var response = await client.GetAsync($"/2/firmware/versions/9.9.9/{Guid.NewGuid()}");
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
     }
 
@@ -153,7 +153,7 @@ public class VersionsControllerTests
 
         using var client = Factory.CreateClient();
         var body = await client.GetFromJsonAsync<JsonElement>(
-            $"/v2/firmware/versions/1.5.1/{boardId}");
+            $"/2/firmware/versions/1.5.1/{boardId}");
 
         await Assert.That(body.GetProperty("version").GetString()).IsEqualTo("1.5.1");
         await Assert.That(body.GetProperty("boardId").GetString()).IsEqualTo(BoardName);
@@ -167,7 +167,7 @@ public class VersionsControllerTests
 
         using var client = Factory.CreateClient();
         var body = await client.GetFromJsonAsync<JsonElement>(
-            $"/v2/firmware/versions/1.5.1/{BoardName}");
+            $"/2/firmware/versions/1.5.1/{BoardName}");
 
         await Assert.That(body.GetProperty("boardId").GetString()).IsEqualTo(BoardName);
 
@@ -181,7 +181,7 @@ public class VersionsControllerTests
         await SeedVersionWithNotesAsync("1.5.1");
 
         using var client = Factory.CreateClient();
-        var response = await client.GetAsync("/v2/firmware/versions/1.5.1/No-Such-Board");
+        var response = await client.GetAsync("/2/firmware/versions/1.5.1/No-Such-Board");
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
     }
 

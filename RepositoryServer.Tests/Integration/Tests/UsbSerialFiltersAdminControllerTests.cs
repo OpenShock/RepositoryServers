@@ -7,7 +7,7 @@ namespace OpenShock.RepositoryServer.Tests.Integration.Tests;
 [NotInParallel("repo-server-integration")]
 public class UsbSerialFiltersAdminControllerTests
 {
-    private const string BasePath = "/v2/firmware/admin/usb-serial-filters";
+    private const string BasePath = "/2/firmware/admin/usb-serial-filters";
 
     [ClassDataSource<WebApplicationFactory>(Shared = SharedType.PerTestSession)]
     public required WebApplicationFactory Factory { get; init; }
@@ -119,7 +119,7 @@ public class UsbSerialFiltersAdminControllerTests
         });
 
         using var client = Factory.CreateClient();
-        var response = await client.GetAsync("/v2/firmware/manifest");
+        var response = await client.GetAsync("/2/firmware/manifest");
         var json = await response.Content.ReadAsStringAsync();
 
         // Vendor-wide entries must have no `pid` key on the public shape.

@@ -42,14 +42,14 @@ public class PublicBoardsAndChipsControllerTests
 
         using var client = Factory.CreateClient();
         var boardsForChipA = await client.GetFromJsonAsync<List<FirmwareBoardDto>>(
-            "/v2/firmware/boards?chip=ESP32-S3");
+            "/2/firmware/boards?chip=ESP32-S3");
         await Assert.That(boardsForChipA).IsNotNull();
         await Assert.That(boardsForChipA!).Count().IsEqualTo(1);
         await Assert.That(boardsForChipA[0].ChipName).IsEqualTo("ESP32-S3");
 
         // Chip names are matched case-insensitively, same as board names.
         var lowerCased = await client.GetFromJsonAsync<List<FirmwareBoardDto>>(
-            "/v2/firmware/boards?chip=esp32-s3");
+            "/2/firmware/boards?chip=esp32-s3");
         await Assert.That(lowerCased!).Count().IsEqualTo(1);
     }
 
@@ -76,9 +76,9 @@ public class PublicBoardsAndChipsControllerTests
 
         using var client = Factory.CreateClient();
         var withDiscontinued = await client.GetFromJsonAsync<List<FirmwareBoardDto>>(
-            "/v2/firmware/boards?includeDiscontinued=true");
+            "/2/firmware/boards?includeDiscontinued=true");
         var withoutDiscontinued = await client.GetFromJsonAsync<List<FirmwareBoardDto>>(
-            "/v2/firmware/boards?includeDiscontinued=false");
+            "/2/firmware/boards?includeDiscontinued=false");
 
         await Assert.That(withDiscontinued!).Count().IsEqualTo(2);
         await Assert.That(withoutDiscontinued!).Count().IsEqualTo(1);
@@ -101,7 +101,7 @@ public class PublicBoardsAndChipsControllerTests
         }
 
         using var client = Factory.CreateClient();
-        var chips = await client.GetFromJsonAsync<List<FirmwareChipDto>>("/v2/firmware/chips");
+        var chips = await client.GetFromJsonAsync<List<FirmwareChipDto>>("/2/firmware/chips");
         await Assert.That(chips).IsNotNull();
         await Assert.That(chips!).Count().IsEqualTo(1);
         await Assert.That(chips[0].Name).IsEqualTo("ESP32-C6");

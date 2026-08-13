@@ -10,7 +10,7 @@ namespace OpenShock.RepositoryServer.Tests.Integration.Tests;
 [NotInParallel("repo-server-integration")]
 public class AdvisoriesAdminControllerTests
 {
-    private const string BasePath = "/v2/firmware/admin/advisories";
+    private const string BasePath = "/2/firmware/admin/advisories";
 
     [ClassDataSource<WebApplicationFactory>(Shared = SharedType.PerTestSession)]
     public required WebApplicationFactory Factory { get; init; }
@@ -172,7 +172,7 @@ public class AdvisoriesAdminControllerTests
         await Assert.That(createResponse.StatusCode).IsEqualTo(HttpStatusCode.Created);
 
         using var publicClient = Factory.CreateClient();
-        var manifest = await publicClient.GetFromJsonAsync<JsonElement>("/v2/firmware/manifest");
+        var manifest = await publicClient.GetFromJsonAsync<JsonElement>("/2/firmware/manifest");
         var advisories = manifest.GetProperty("advisories").EnumerateArray().ToList();
 
         await Assert.That(advisories).Count().IsEqualTo(1);

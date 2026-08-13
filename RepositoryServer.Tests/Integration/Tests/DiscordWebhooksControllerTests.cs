@@ -11,7 +11,7 @@ namespace OpenShock.RepositoryServer.Tests.Integration.Tests;
 [NotInParallel("repo-server-integration")]
 public class DiscordWebhooksControllerTests
 {
-    private const string BasePath = "/v2/admin/discord-webhooks";
+    private const string BasePath = "/2/admin/discord-webhooks";
     private const string WebhookUrl = "https://discord.com/api/webhooks/123456789/s3cr3t-token-value";
 
     [ClassDataSource<WebApplicationFactory>(Shared = SharedType.PerTestSession)]

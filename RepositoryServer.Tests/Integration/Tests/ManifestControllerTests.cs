@@ -21,7 +21,7 @@ public class ManifestControllerTests
     {
         using var client = Factory.CreateClient();
 
-        var response = await client.GetAsync("/v2/firmware/manifest");
+        var response = await client.GetAsync("/2/firmware/manifest");
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
 
         var manifest = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -111,7 +111,7 @@ public class ManifestControllerTests
         }
 
         using var client = Factory.CreateClient();
-        var response = await client.GetAsync("/v2/firmware/manifest");
+        var response = await client.GetAsync("/2/firmware/manifest");
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
 
         var manifest = await response.Content.ReadFromJsonAsync<JsonElement>();
@@ -156,7 +156,7 @@ public class ManifestControllerTests
     public async Task GetManifest_SendsCacheControlHeader()
     {
         using var client = Factory.CreateClient();
-        var response = await client.GetAsync("/v2/firmware/manifest");
+        var response = await client.GetAsync("/2/firmware/manifest");
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
         await Assert.That(response.Headers.CacheControl).IsNotNull();

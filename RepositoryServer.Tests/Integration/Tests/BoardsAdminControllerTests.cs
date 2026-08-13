@@ -11,8 +11,8 @@ namespace OpenShock.RepositoryServer.Tests.Integration.Tests;
 [NotInParallel("repo-server-integration")]
 public class BoardsAdminControllerTests
 {
-    private const string BasePath = "/v2/firmware/admin/boards";
-    private const string ChipsPath = "/v2/firmware/admin/chips";
+    private const string BasePath = "/2/firmware/admin/boards";
+    private const string ChipsPath = "/2/firmware/admin/chips";
 
     [ClassDataSource<WebApplicationFactory>(Shared = SharedType.PerTestSession)]
     public required WebApplicationFactory Factory { get; init; }

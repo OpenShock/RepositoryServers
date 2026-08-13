@@ -10,7 +10,7 @@ namespace OpenShock.RepositoryServer.Controllers.V2.Firmware.Admin;
 
 [ApiVersion("2.0")]
 [ApiController]
-[Route("/v{version:apiVersion}/firmware/admin/usb-devices")]
+[Route("/{version:apiVersion}/firmware/admin/usb-devices")]
 [Authorize(AuthenticationSchemes = AuthSchemas.AdminToken)]
 public class UsbDevicesController : OpenShockControllerBase
 {

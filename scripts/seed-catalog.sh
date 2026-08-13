@@ -26,7 +26,7 @@ set -euo pipefail
 : "${REPO_SERVER_URL:?REPO_SERVER_URL must be set}"
 : "${ADMIN_TOKEN:?ADMIN_TOKEN must be set}"
 
-BASE="${REPO_SERVER_URL%/}/v2/firmware/admin"
+BASE="${REPO_SERVER_URL%/}/2/firmware/admin"
 
 api() {
   local method=$1 path=$2 body=${3:-}
@@ -58,7 +58,7 @@ for chip in "${!CHIP_ARCH[@]}"; do
   if id=$(api POST /chips "$payload" 2>/dev/null | jq -r '.id'); then
     echo "    created $chip"
   else
-    id=$(curl -fsS "${REPO_SERVER_URL%/}/v2/firmware/chips" | jq -r --arg n "$chip" '.[] | select(.name == $n) | .id')
+    id=$(curl -fsS "${REPO_SERVER_URL%/}/2/firmware/chips" | jq -r --arg n "$chip" '.[] | select(.name == $n) | .id')
     echo "    exists  $chip"
   fi
   if [ -z "$id" ] || [ "$id" = "null" ]; then

@@ -12,7 +12,7 @@ namespace OpenShock.RepositoryServer.Controllers.V2.Firmware.Admin;
 
 [ApiVersion("2.0")]
 [ApiController]
-[Route("/v{version:apiVersion}/firmware/admin/boards")]
+[Route("/{version:apiVersion}/firmware/admin/boards")]
 [Authorize(AuthenticationSchemes = AuthSchemas.AdminToken)]
 public class BoardsAdminController : OpenShockControllerBase
 {

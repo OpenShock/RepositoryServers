@@ -12,7 +12,7 @@ namespace OpenShock.RepositoryServer.Controllers.V2.Firmware.Admin;
 
 [ApiVersion("2.0")]
 [ApiController]
-[Route("/v{version:apiVersion}/firmware/admin/chips")]
+[Route("/{version:apiVersion}/firmware/admin/chips")]
 [Authorize(AuthenticationSchemes = AuthSchemas.AdminToken)]
 public class ChipsAdminController : OpenShockControllerBase
 {

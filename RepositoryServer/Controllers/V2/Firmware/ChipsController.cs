@@ -9,7 +9,7 @@ namespace OpenShock.RepositoryServer.Controllers.V2.Firmware;
 
 [ApiVersion("2.0")]
 [ApiController]
-[Route("/v{version:apiVersion}/firmware/chips")]
+[Route("/{version:apiVersion}/firmware/chips")]
 public sealed class ChipsController : OpenShockControllerBase
 {
     private readonly RepoServerContext _db;

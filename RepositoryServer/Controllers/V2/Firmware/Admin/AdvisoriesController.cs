@@ -11,7 +11,7 @@ namespace OpenShock.RepositoryServer.Controllers.V2.Firmware.Admin;
 
 [ApiVersion("2.0")]
 [ApiController]
-[Route("/v{version:apiVersion}/firmware/admin/advisories")]
+[Route("/{version:apiVersion}/firmware/admin/advisories")]
 [Authorize(AuthenticationSchemes = AuthSchemas.AdminToken)]
 public class AdvisoriesController : OpenShockControllerBase
 {
