@@ -33,9 +33,10 @@ public sealed class LatestController : OpenShockControllerBase
             return Problem(FirmwareError.FirmwareInvalidChannel);
         }
 
+        var visibleChannels = ReleaseChannels.VisibleTo(firmwareChannel);
         var latest = await _db.FirmwareVersions
-            .Where(v => v.Channel == firmwareChannel)
-            .OrderByDescending(v => v.ReleaseDate)
+            .Where(v => visibleChannels.Contains(v.Channel))
+            .OrderByNewest()
             .Include(v => v.RepositoryNavigation)
             .Include(v => v.Artifacts)
             .Include(v => v.ReleaseNotes)
@@ -78,9 +79,10 @@ public sealed class LatestController : OpenShockControllerBase
             return Problem(FirmwareError.FirmwareBoardNotFound);
         }
 
+        var visibleChannels = ReleaseChannels.VisibleTo(firmwareChannel);
         var latestVersion = await _db.FirmwareVersions
-            .Where(v => v.Channel == firmwareChannel)
-            .OrderByDescending(v => v.ReleaseDate)
+            .Where(v => visibleChannels.Contains(v.Channel))
+            .OrderByNewest()
             .Select(v => v.Version)
             .FirstOrDefaultAsync(ct);
 

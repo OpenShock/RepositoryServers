@@ -464,8 +464,28 @@ Returns the most recent published release for a channel, with all boards, their 
 
 **Cache**: `Cache-Control: public, max-age=300`
 
+**Channels cascade.** A request for a channel returns the newest release visible to that channel,
+where `stable ⊆ beta ⊆ develop`:
+
+| Requested | Considers |
+|-----------|-----------|
+| `stable`  | stable |
+| `beta`    | stable, beta |
+| `develop` | stable, beta, develop |
+
+This matches how releases are actually produced: shipping a stable build advances the stable, beta and
+develop pointers together, so a stable release *is* the newest thing a beta subscriber should receive.
+Strict per-channel equality would pin a beta hub to the last explicit release candidate and offer it a
+downgrade. The cascade applies to `/latest/*`, `/manifest`, and the `channel` filter on `/versions`.
+
+**Ordering is a total order.** `release_date` is client-supplied and not unique, so it is never the sole
+sort key. Ties break on `version` descending, which is the primary key. Without that tiebreaker
+`/manifest`, `/latest/{channel}` and `/latest/{channel}/{board}` could disagree with each other and flip
+between requests — a hub sees that as firmware flapping — and offset pagination could duplicate and drop
+rows across pages.
+
 **Server implementation notes**:
-- Query: `FirmwareVersions` WHERE channel, ORDER BY release_date DESC, LIMIT 1
+- Query: `FirmwareVersions` WHERE channel IN (visible channels), ORDER BY release_date DESC, version DESC, LIMIT 1
 - Join: `FirmwareArtifact` → `FirmwareBoard` → `FirmwareChip` to populate chip ref and discontinued flag
 - Include: `FirmwareReleaseNotes` ordered by index
 

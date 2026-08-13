@@ -94,7 +94,7 @@ public class BoardsAdminControllerTests
             ChipId = chipId,
             RequiredArtifactTypes = ["merged"]
         });
-        await Assert.That(second.IsSuccessStatusCode).IsFalse();
+        await Assert.That(second.StatusCode).IsEqualTo(HttpStatusCode.Conflict);
     }
 
     [Test]

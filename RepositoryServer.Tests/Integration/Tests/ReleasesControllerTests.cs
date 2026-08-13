@@ -315,6 +315,63 @@ public class ReleasesControllerTests
         await Assert.That(publish.IsSuccessStatusCode).IsFalse();
     }
 
+    // ---- Atomicity and coercion ----
+
+    [Test]
+    public async Task Upload_PartialFailure_LeavesNoOrphanedBlobsOrLostState()
+    {
+        var seed = await SeedAsync();
+        using var client = Factory.CreateCiCdClient(seed.RepositoryId);
+        var releaseId = await InitReleaseAsync(client, "1.5.1");
+
+        // A valid first upload establishes staged state we must not lose.
+        await UploadArtifactsAsync(client, releaseId, BoardName);
+
+        // Now send two files where only one hashes correctly.
+        var goodBytes = Encoding.UTF8.GetBytes("good-app-bytes");
+        var badBytes = Encoding.UTF8.GetBytes("bad-merged-bytes");
+        var content = new MultipartFormDataContent();
+        content.Add(new ByteArrayContent(goodBytes), "app", "app.bin");
+        content.Add(new ByteArrayContent(badBytes), "merged", "firmware.bin");
+        content.Add(new StringContent(JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["app"] = Convert.ToHexString(SHA256.HashData(goodBytes)),
+            ["merged"] = new string('a', 64)
+        })), "sha256");
+
+        var response = await client.PutAsync(
+            $"/v2/firmware/releases/{releaseId}/boards/{BoardName}", content);
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+
+        // The prior staged artifact must survive: nothing is deleted or written until every file in
+        // the request has been verified.
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<RepoServerContext>();
+        var staged = db.FirmwareStagedArtifacts.Where(a => a.ReleaseId == releaseId).ToList();
+        await Assert.That(staged).Count().IsEqualTo(1);
+        await Assert.That(staged[0].ArtifactType).IsEqualTo(FirmwareArtifactType.Merged);
+    }
+
+    [Test]
+    public async Task Init_NonUtcReleaseDate_IsAcceptedAndNormalized()
+    {
+        var seed = await SeedAsync();
+        using var client = Factory.CreateCiCdClient(seed.RepositoryId);
+
+        // Npgsql rejects a non-zero offset for `timestamp with time zone`, which used to surface as a
+        // generic 500 for any CI runner outside UTC.
+        var response = await client.PostAsJsonAsync("/v2/firmware/releases", new InitReleaseRequest
+        {
+            Version = "1.5.1",
+            Channel = "stable",
+            ReleaseDate = new DateTimeOffset(2026, 4, 15, 12, 0, 0, TimeSpan.FromHours(2)),
+            Boards = [BoardName],
+            Changelog = Changelog
+        });
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.Created);
+    }
+
     // ---- Helpers ----
 
     private sealed record Seed(Guid RepositoryId, Guid BoardId, Guid ChipId);

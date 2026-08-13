@@ -187,8 +187,80 @@ public class LatestControllerTests
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
     }
 
+    [Test]
+    public async Task GetLatest_BetaChannel_IncludesNewerStableRelease()
+    {
+        // CI advances stable, beta and develop pointers together when it ships a stable build, so a
+        // beta subscriber must be offered it. Strict per-channel equality would pin them back to the
+        // last explicit release candidate and offer a downgrade.
+        var (_, chipId, repoId) = await SeedReleaseAsync("1.5.0-beta.1", ReleaseChannel.Beta);
+        await AddVersionAsync("1.5.0", ReleaseChannel.Stable, DateTimeOffset.UtcNow, repoId);
+
+        using var client = Factory.CreateClient();
+        var body = await client.GetFromJsonAsync<JsonElement>("/v2/firmware/latest/beta");
+        await Assert.That(body.GetProperty("version").GetString()).IsEqualTo("1.5.0");
+    }
+
+    [Test]
+    public async Task GetLatest_StableChannel_ExcludesBetaReleases()
+    {
+        // The cascade only runs one way.
+        var (_, _, repoId) = await SeedReleaseAsync("1.5.0", ReleaseChannel.Stable);
+        await AddVersionAsync("1.6.0-beta.1", ReleaseChannel.Beta, DateTimeOffset.UtcNow.AddDays(1), repoId);
+
+        using var client = Factory.CreateClient();
+        var body = await client.GetFromJsonAsync<JsonElement>("/v2/firmware/latest/stable");
+        await Assert.That(body.GetProperty("version").GetString()).IsEqualTo("1.5.0");
+    }
+
+    [Test]
+    public async Task GetLatest_TiedReleaseDates_ResolvesDeterministicallyAndAgreesWithManifest()
+    {
+        // release_date is client-supplied and not unique — the spec's own example uses midnight. With
+        // no tiebreaker, ties were broken arbitrarily by the database and endpoints could disagree
+        // with each other and flip between requests, which a hub sees as firmware flapping.
+        var sameInstant = DateTimeOffset.Parse("2026-04-15T00:00:00Z");
+        var (_, _, repoId) = await SeedReleaseAsync("1.5.1", ReleaseChannel.Stable, sameInstant);
+        await AddVersionAsync("1.5.2", ReleaseChannel.Stable, sameInstant, repoId);
+
+        using var client = Factory.CreateClient();
+
+        var first = await client.GetFromJsonAsync<JsonElement>("/v2/firmware/latest/stable");
+        var picked = first.GetProperty("version").GetString();
+        await Assert.That(picked).IsEqualTo("1.5.2");
+
+        // Stable across repeated calls...
+        for (var i = 0; i < 3; i++)
+        {
+            var again = await client.GetFromJsonAsync<JsonElement>("/v2/firmware/latest/stable");
+            await Assert.That(again.GetProperty("version").GetString()).IsEqualTo(picked);
+        }
+
+        // ...and consistent with the manifest, which computes latest independently.
+        var manifest = await client.GetFromJsonAsync<JsonElement>("/v2/firmware/manifest");
+        await Assert.That(manifest.GetProperty("latest").GetProperty("stable").GetString())
+            .IsEqualTo(picked);
+    }
+
+    private async Task AddVersionAsync(
+        string version, ReleaseChannel channel, DateTimeOffset releaseDate, Guid repoId)
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<RepoServerContext>();
+
+        db.FirmwareVersions.Add(new FirmwareVersion
+        {
+            Version = version,
+            Channel = channel,
+            ReleaseDate = releaseDate,
+            RepositoryId = repoId,
+            CommitHash = "abc1234567890abcdef1234567890abcdef12345"
+        });
+        await db.SaveChangesAsync();
+    }
+
     private async Task<(Guid boardId, Guid chipId, Guid repoId)> SeedReleaseAsync(
-        string version, ReleaseChannel channel)
+        string version, ReleaseChannel channel, DateTimeOffset? releaseDate = null)
     {
         await using var scope = Factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RepoServerContext>();
@@ -217,7 +289,7 @@ public class LatestControllerTests
         {
             Version = version,
             Channel = channel,
-            ReleaseDate = DateTimeOffset.UtcNow,
+            ReleaseDate = releaseDate ?? DateTimeOffset.UtcNow,
             RepositoryId = repo.Id,
             CommitHash = "abc1234567890abcdef1234567890abcdef12345",
             Ref = "refs/tags/v" + version

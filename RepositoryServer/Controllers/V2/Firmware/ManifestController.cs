@@ -36,9 +36,10 @@ public sealed class ManifestController : OpenShockControllerBase
         var latest = new Dictionary<string, string>();
         foreach (var ch in AllChannels)
         {
+            var visibleChannels = ReleaseChannels.VisibleTo(ch);
             var version = await _db.FirmwareVersions
-                .Where(v => v.Channel == ch)
-                .OrderByDescending(v => v.ReleaseDate)
+                .Where(v => visibleChannels.Contains(v.Channel))
+                .OrderByNewest()
                 .Select(v => v.Version)
                 .FirstOrDefaultAsync(ct);
 

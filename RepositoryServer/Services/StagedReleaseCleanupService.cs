@@ -97,17 +97,37 @@ public sealed class StagedReleaseCleanupService : BackgroundService
         {
             try
             {
+                // Claim the release with a conditional update before deleting anything.
+                //
+                // The rows were read moments ago, and publish is a concurrent operation: a release
+                // hitting its TTL exactly as CI publishes it would otherwise end up aborted in the
+                // database, live in the public API, and deleted from the CDN. Narrowing the UPDATE to
+                // the statuses we decided on makes the claim atomic — if publish won, this affects
+                // zero rows and we leave the artifacts alone.
+                var claimed = await db.FirmwareReleases
+                    .Where(r => r.Id == release.Id &&
+                                (r.Status == ReleaseStatus.Staging || r.Status == ReleaseStatus.Editing))
+                    .ExecuteUpdateAsync(
+                        setters => setters.SetProperty(r => r.Status, ReleaseStatus.Aborted), ct);
+
+                if (claimed == 0)
+                {
+                    _logger.LogInformation(
+                        "Skipped expired release {ReleaseId} (version={Version}) — it left staging concurrently",
+                        release.Id, release.Version);
+                    continue;
+                }
+
                 foreach (var artifact in release.StagedArtifacts)
                 {
                     var cdnPath = FirmwareArtifactFileNames.BuildStoragePath(release.Version, artifact.BoardId, artifact.ArtifactType);
                     await _storage.DeleteFileAsync(cdnPath, ct);
                 }
 
-                release.Status = ReleaseStatus.Aborted;
-                await db.SaveChangesAsync(ct);
-
+                // release.Status is still the pre-abort value — ExecuteUpdate bypasses the change
+                // tracker — which is what makes it possible to tell from the log which TTL fired.
                 _logger.LogInformation(
-                    "Aborted expired staged release {ReleaseId} (version={Version} status={Status}) after TTL expiry",
+                    "Aborted expired release {ReleaseId} (version={Version}) after the {PriorStatus} TTL expired",
                     release.Id, release.Version, release.Status);
 
                 await _discord.NotifyStagedReleaseExpiredAsync(

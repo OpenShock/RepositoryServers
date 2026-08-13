@@ -6,6 +6,7 @@ using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.Models.Firmware;
 using OpenShock.RepositoryServer.Problems;
 using OpenShock.RepositoryServer.RepoServerDb;
+using OpenShock.RepositoryServer.Utils;
 
 namespace OpenShock.RepositoryServer.Controllers.V2.Firmware.Admin;
 
@@ -50,7 +51,15 @@ public class BoardsAdminController : OpenShockControllerBase
         };
 
         _db.FirmwareBoards.Add(board);
-        await _db.SaveChangesAsync(ct);
+
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (UniqueViolation.IsOn(ex, UniqueViolation.BoardNameLower))
+        {
+            return Problem(FirmwareError.FirmwareBoardNameConflict);
+        }
 
         return Created((string?)null, new { id = board.Id });
     }
@@ -81,7 +90,15 @@ public class BoardsAdminController : OpenShockControllerBase
         board.ChipId = request.ChipId;
         board.RequiredArtifactTypes = requiredArtifactTypes;
 
-        await _db.SaveChangesAsync(ct);
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (UniqueViolation.IsOn(ex, UniqueViolation.BoardNameLower))
+        {
+            return Problem(FirmwareError.FirmwareBoardNameConflict);
+        }
+
         return Ok();
     }
 

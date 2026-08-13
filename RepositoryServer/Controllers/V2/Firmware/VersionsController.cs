@@ -45,7 +45,9 @@ public sealed class VersionsController : OpenShockControllerBase
             {
                 return Problem(FirmwareError.FirmwareInvalidChannel);
             }
-            query = query.Where(v => v.Channel == firmwareChannel);
+            // Cascading, so a beta subscriber's history includes the stable releases they can install.
+            var visibleChannels = ReleaseChannels.VisibleTo(firmwareChannel);
+            query = query.Where(v => visibleChannels.Contains(v.Channel));
         }
 
         var total = await query.CountAsync(ct);
@@ -54,7 +56,7 @@ public sealed class VersionsController : OpenShockControllerBase
         var effectiveOffset = Math.Max(offset ?? 0, 0);
 
         var rows = await query
-            .OrderByDescending(v => v.ReleaseDate)
+            .OrderByNewest()
             .Skip(effectiveOffset)
             .Take(effectiveLimit)
             .ToListAsync(ct);

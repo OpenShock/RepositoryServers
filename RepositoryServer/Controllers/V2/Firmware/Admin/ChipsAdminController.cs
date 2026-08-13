@@ -6,6 +6,7 @@ using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.Models.Firmware;
 using OpenShock.RepositoryServer.Problems;
 using OpenShock.RepositoryServer.RepoServerDb;
+using OpenShock.RepositoryServer.Utils;
 
 namespace OpenShock.RepositoryServer.Controllers.V2.Firmware.Admin;
 
@@ -45,7 +46,15 @@ public class ChipsAdminController : OpenShockControllerBase
         };
 
         _db.FirmwareChips.Add(chip);
-        await _db.SaveChangesAsync(ct);
+
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (UniqueViolation.IsOn(ex, UniqueViolation.ChipNameLower))
+        {
+            return Problem(FirmwareError.FirmwareChipNameConflict);
+        }
 
         return Created((string?)null, new { id = chip.Id });
     }

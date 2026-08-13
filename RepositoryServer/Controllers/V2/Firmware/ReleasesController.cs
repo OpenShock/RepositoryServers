@@ -6,6 +6,7 @@ using FlexLabs.EntityFrameworkCore.Upsert;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using OneOf;
 using OpenShock.RepositoryServer.Config;
 using OpenShock.RepositoryServer.Enums;
@@ -136,7 +137,9 @@ public class ReleasesController : OpenShockControllerBase
             CommitHash = sourceClaims.CommitHash,
             Ref = sourceClaims.Ref,
             RunId = sourceClaims.RunId,
-            ReleaseDate = request.ReleaseDate,
+            // Npgsql refuses a DateTimeOffset with a non-zero offset for `timestamp with time zone`,
+            // which would surface as a generic 500. CI runners in a non-UTC zone emit exactly that.
+            ReleaseDate = request.ReleaseDate.ToUniversalTime(),
             Status = status,
             DeclaredBoards = declaredBoards.Select(b => b.Id).ToArray(),
             CreatedAt = _timeProvider.GetUtcNow(),
@@ -157,7 +160,17 @@ public class ReleasesController : OpenShockControllerBase
             });
         }
 
-        await _db.SaveChangesAsync(ct);
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex) when (IsOpenReleaseConflict(ex))
+        {
+            // Lost the race against a concurrent job for the same tag. The check above catches this in
+            // the common case; ix_firmware_releases_open_version closes the read-then-insert window,
+            // and both paths surface as the same 409.
+            return Problem(FirmwareError.FirmwareReleaseAlreadyStaging);
+        }
 
         if (status == ReleaseStatus.Editing)
         {
@@ -285,13 +298,14 @@ public class ReleasesController : OpenShockControllerBase
             }
         }
 
-        // Remove any previously staged artifacts for this board in this release.
-        await _db.FirmwareStagedArtifacts
-            .Where(a => a.ReleaseId == releaseId && a.BoardId == boardId)
-            .ExecuteDeleteAsync(ct);
-
-        var cdnBase = _apiConfig.Firmware.CdnBaseUrl.TrimEnd('/');
-        var uploadedArtifacts = new List<FirmwareArtifactDto>();
+        // Read and verify every artifact BEFORE touching storage or the database.
+        //
+        // The previous order — delete prior staged rows, then hash-and-upload each file in turn,
+        // then report mismatches — meant one good file alongside one bad one left the good blob on the
+        // CDN with no row referencing it. Neither abort nor the TTL job could ever find it, because
+        // both enumerate staged rows. It also destroyed the board's previously valid staged artifacts
+        // on the way to failing.
+        var verified = new List<(FirmwareArtifactType Type, byte[] Bytes, string Hash)>();
         var mismatches = new List<string>();
 
         foreach (var (artifactType, file) in uploadedByType)
@@ -308,6 +322,27 @@ public class ReleasesController : OpenShockControllerBase
                 continue;
             }
 
+            verified.Add((artifactType, bytes, actual));
+        }
+
+        if (mismatches.Count > 0)
+        {
+            return Problem(FirmwareError.FirmwareSha256Mismatch(string.Join("; ", mismatches)));
+        }
+
+        var cdnBase = _apiConfig.Firmware.CdnBaseUrl.TrimEnd('/');
+        var uploadedArtifacts = new List<FirmwareArtifactDto>();
+
+        await using var uploadTransaction = await _db.Database.BeginTransactionAsync(ct);
+
+        // Replacing this board's staged rows. Uploads overwrite at the same deterministic keys, so a
+        // re-upload of the same board never leaves a stale blob behind.
+        await _db.FirmwareStagedArtifacts
+            .Where(a => a.ReleaseId == releaseId && a.BoardId == boardId)
+            .ExecuteDeleteAsync(ct);
+
+        foreach (var (artifactType, bytes, hash) in verified)
+        {
             var cdnPath = FirmwareArtifactFileNames.BuildStoragePath(release.Version, boardId, artifactType);
 
             await using var uploadStream = new MemoryStream(bytes);
@@ -318,7 +353,7 @@ public class ReleasesController : OpenShockControllerBase
                 ReleaseId = releaseId,
                 BoardId = boardId,
                 ArtifactType = artifactType,
-                HashSha256 = Convert.FromHexString(actual),
+                HashSha256 = Convert.FromHexString(hash),
                 FileSize = bytes.Length,
             });
 
@@ -326,17 +361,13 @@ public class ReleasesController : OpenShockControllerBase
             {
                 Type = artifactType.ToString().ToLowerInvariant(),
                 Url = FirmwareArtifactFileNames.BuildUrl(cdnBase, release.Version, boardId, artifactType),
-                Sha256Hash = actual,
+                Sha256Hash = hash,
                 FileSize = bytes.Length,
             });
         }
 
-        if (mismatches.Count > 0)
-        {
-            return Problem(FirmwareError.FirmwareSha256Mismatch(string.Join("; ", mismatches)));
-        }
-
         await _db.SaveChangesAsync(ct);
+        await uploadTransaction.CommitAsync(ct);
         return Ok(uploadedArtifacts);
     }
 
@@ -500,6 +531,13 @@ public class ReleasesController : OpenShockControllerBase
     // ---- Helpers ----
 
     private readonly record struct SourceClaims(Guid RepositoryId, string CommitHash, string? Ref, string? RunId);
+
+    /// <summary>
+    /// True when the failure is the partial unique index guarding one open release per version.
+    /// </summary>
+    private static bool IsOpenReleaseConflict(DbUpdateException ex) =>
+        ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation } pg
+        && pg.ConstraintName == "ix_firmware_releases_open_version";
 
     /// <summary>
     /// Confirms the authenticated repository is the one that created this release.
