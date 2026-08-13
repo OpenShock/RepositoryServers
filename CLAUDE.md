@@ -125,9 +125,16 @@ docker/
   `firmware_board_usb_devices`
 - Firmware enums: `release_channel`, `firmware_artifact_type`, `firmware_release_note_type`,
   `firmware_chip_architecture`, `release_status`, `repository_provider`
-- URL convention for firmware artifacts: `{CdnBaseUrl}/{version}/{boardName}/{artifactType}.bin`
-  (board **name**, not id — see `Utils/FirmwareBoardLookup`, the single resolution chokepoint for
-  public board references, and firmware-api-spec.md §4.2)
+- URL convention for firmware artifacts: `{CdnBaseUrl}/{version}/{boardId}/{artifactType}.bin`
+  — the board **UUID**, because a storage key must be immutable. The board *name* is the public
+  identifier everywhere it acts as a label (routes, response `boardId`, boards map key, ingestion,
+  errors); see `Utils/FirmwareBoardLookup`, the single resolution chokepoint, and spec §4.2
+- Uploads are staged under `_staging/{releaseId}/` and copied to the published key by
+  `PublishRelease`, so a published key is written exactly once and abort/TTL cleanup can never
+  name a live key (`Utils/FirmwareArtifactFileNames.BuildStagingPath`)
+- The server is the CDN writer: firmware CI drives init → upload → publish rather than uploading
+  to the CDN itself. `scripts/seed-catalog.sh` bootstraps chips, boards and the publish allowlist —
+  a fresh database rejects every ingestion until it has run
 - Source-traceability URLs (commit / ref / run) are built server-side per provider
   (`Utils/SourceUrlBuilder`) and never stored
 
