@@ -17,4 +17,4 @@ if [ ! -f "$CERT_PATH" ]; then
   rm key.pem cert.pem
 fi
 
-exec dotnet OpenShock.Desktop.RepositoryServer.dll
+exec dotnet OpenShock.RepositoryServer.dll

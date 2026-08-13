@@ -8,7 +8,7 @@ name: ci-tag
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/api
+  IMAGE_NAME: ${{ github.repository_owner }}/repository-server
 
 jobs:
   
@@ -40,7 +40,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302  # v6.2.0
         with:
-          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/desktop-repository-server
+          images: ${{ env.REGISTRY }}/${{ github.repository_owner }}/repository-server
           flavor: |
             latest=false
           tags: |
@@ -53,7 +53,7 @@ jobs:
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a  # v7.3.0
         with:
           context: .
-          file: Dockerfile
+          file: docker/RepositoryServer.Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

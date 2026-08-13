@@ -24,8 +24,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: desktop-repository-server-tunit
-            project: DesktopRepositoryServer.Tests/DesktopRepositoryServer.Tests.csproj
+          - name: repository-server-tunit
+            project: RepositoryServer.Tests/RepositoryServer.Tests.csproj
 
     steps:
       - name: Checkout
@@ -47,8 +47,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - dockerfile: docker/DesktopRepositoryServer.Dockerfile
-            image: desktop-repository-server
+          - dockerfile: docker/RepositoryServer.Dockerfile
+            image: repository-server
 
     steps:
       - name: Checkout
@@ -82,7 +82,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - image: desktop-repository-server
+          - image: repository-server
     
     steps:
       - name: Checkout
@@ -112,7 +112,7 @@ jobs:
         uses: OpenShock/actions/repository-dispatch@21ca2d511bca92cf24fb502fa302f82700822584 # v1.1.1
         with:
           repo: openshock/kubernetes-cluster-gitops
-          event-type: update-desktop-repository-server-prod
+          event-type: update-repository-server-prod
           client-payload: |
             {"tag": "${{ inputs.tag-prefix  || 'rn' }}-${{ github.run_number }}-a${{ github.run_attempt }}"}
           token: ${{ secrets.GITOPS_PAT }}
