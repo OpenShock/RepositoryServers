@@ -1,18 +1,21 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using OpenShock.Internal.Common;
 using OpenShock.RepositoryServer.Config;
 using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.Models.Firmware;
 using OpenShock.RepositoryServer.Problems;
 using OpenShock.RepositoryServer.RepoServerDb;
 using OpenShock.RepositoryServer.Utils;
+using System.Net.Mime;
 
 namespace OpenShock.RepositoryServer.Controllers.V2.Firmware;
 
 [ApiVersion("2.0")]
 [ApiController]
 [Route("/{version:apiVersion}/firmware/latest")]
+[Consumes(MediaTypeNames.Application.Json)]
 public sealed class LatestController : OpenShockControllerBase
 {
     private readonly RepoServerContext _db;
@@ -57,7 +60,10 @@ public sealed class LatestController : OpenShockControllerBase
         return Ok(FirmwareResponseMapper.ToReleaseDto(latest, boards, cdnBase));
     }
 
+    /// <param name="channel">Release channel, e.g. <c>stable</c> or <c>beta</c>.</param>
     /// <param name="board">Board name (e.g. <c>"Wemos-D1-Mini-ESP32"</c>) or board id.</param>
+    /// <param name="version">Version the caller already has. Answers 204 when it is already the latest.</param>
+    /// <param name="ct">Cancellation token.</param>
     [HttpGet("{channel}/{board}")]
     [CacheControl(300)]
     public async Task<IActionResult> GetLatestForBoard(

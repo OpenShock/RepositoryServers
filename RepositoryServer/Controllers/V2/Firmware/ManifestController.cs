@@ -1,16 +1,19 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using OpenShock.Internal.Common;
 using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.Models.Firmware;
 using OpenShock.RepositoryServer.RepoServerDb;
 using OpenShock.RepositoryServer.Utils;
+using System.Net.Mime;
 
 namespace OpenShock.RepositoryServer.Controllers.V2.Firmware;
 
 [ApiVersion("2.0")]
 [ApiController]
 [Route("/{version:apiVersion}/firmware/manifest")]
+[Consumes(MediaTypeNames.Application.Json)]
 public sealed class ManifestController : OpenShockControllerBase
 {
     private static readonly ReleaseChannel[] AllChannels =

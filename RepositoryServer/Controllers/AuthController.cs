@@ -1,9 +1,11 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OpenShock.Internal.Common;
 using OpenShock.RepositoryServer.AuthenticationHandlers;
 using OpenShock.RepositoryServer.Errors;
+using System.Net.Mime;
+using System.Security.Claims;
 
 namespace OpenShock.RepositoryServer.Controllers;
 
@@ -16,6 +18,7 @@ namespace OpenShock.RepositoryServer.Controllers;
 /// </remarks>
 [ApiController]
 [Route("/auth")]
+[Consumes(MediaTypeNames.Application.Json)]
 [ApiExplorerSettings(IgnoreApi = true)]
 public sealed class AuthController : OpenShockControllerBase
 {

@@ -2,12 +2,14 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Module = OpenShock.RepositoryServer.Models.Module;
+using OpenShock.Internal.Common;
 using OpenShock.RepositoryServer.Config;
 using OpenShock.RepositoryServer.Models;
 using OpenShock.RepositoryServer.RepoServerDb;
 using OpenShock.RepositoryServer.Utils;
 using Semver;
-using Module = OpenShock.RepositoryServer.Models.Module;
+using System.Net.Mime;
 using Version = OpenShock.RepositoryServer.Models.Version;
 
 namespace OpenShock.RepositoryServer.Controllers.V1;
@@ -15,6 +17,7 @@ namespace OpenShock.RepositoryServer.Controllers.V1;
 [ApiVersion("1.0")]
 [ApiController]
 [Route("/{version:apiVersion}/")]
+[Consumes(MediaTypeNames.Application.Json)]
 public sealed class RepoController : OpenShockControllerBase
 {
     private readonly RepoServerContext _db;

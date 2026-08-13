@@ -1,6 +1,3 @@
-using System.Security.Cryptography;
-using System.Security.Claims;
-using System.Text.Json;
 using Asp.Versioning;
 using FlexLabs.EntityFrameworkCore.Upsert;
 using Microsoft.AspNetCore.Authorization;
@@ -8,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using OneOf;
+using OpenShock.Internal.Common;
 using OpenShock.RepositoryServer.Config;
 using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.Models.Firmware;
@@ -16,12 +14,17 @@ using OpenShock.RepositoryServer.RepoServerDb;
 using OpenShock.RepositoryServer.Services;
 using OpenShock.RepositoryServer.Utils;
 using Semver;
+using System.Net.Mime;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text.Json;
 
 namespace OpenShock.RepositoryServer.Controllers.V2.Firmware;
 
 [ApiVersion("2.0")]
 [ApiController]
 [Route("/{version:apiVersion}/firmware/releases")]
+[Consumes(MediaTypeNames.Application.Json)]
 // See CiCdController: publishing is a CI-only surface and is kept out of the API reference.
 [ApiExplorerSettings(IgnoreApi = true)]
 [Authorize(AuthenticationSchemes = AuthSchemas.CiCdToken, Policy = AuthSchemas.Policies.PublishFirmware)]
@@ -191,7 +194,9 @@ public class ReleasesController : OpenShockControllerBase
 
     // ---- Upload Board Artifacts ----
 
+    /// <param name="releaseId">Release the artifacts belong to.</param>
     /// <param name="board">Board name (e.g. <c>"Wemos-D1-Mini-ESP32"</c>) or board UUID.</param>
+    /// <param name="ct">Cancellation token.</param>
     [HttpPut("{releaseId:guid}/boards/{board}")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(64 * 1024 * 1024)]

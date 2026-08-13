@@ -41,11 +41,7 @@
   </PropertyGroup>
 
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
-    <!--
-      Not TreatWarningsAsErrors like API/Directory.Build.props: the Asp.Versioning analyzers emit
-      AV0013/AV0014/AV0029/AV0030 against this project's controller and OpenAPI setup, so turning it
-      on fails the build until those are addressed.
-    -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
 
     <!-- Disable Prefer framework type warning -->
     <NoWarn>$(NoWarn);IDE0049</NoWarn>

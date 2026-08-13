@@ -1,18 +1,21 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using OpenShock.Internal.Common;
 using OpenShock.RepositoryServer.Config;
 using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.Models.Firmware;
 using OpenShock.RepositoryServer.Problems;
 using OpenShock.RepositoryServer.RepoServerDb;
 using OpenShock.RepositoryServer.Utils;
+using System.Net.Mime;
 
 namespace OpenShock.RepositoryServer.Controllers.V2.Firmware;
 
 [ApiVersion("2.0")]
 [ApiController]
 [Route("/{version:apiVersion}/firmware/versions")]
+[Consumes(MediaTypeNames.Application.Json)]
 public sealed class VersionsController : OpenShockControllerBase
 {
     private const int DefaultLimit = 20;
@@ -108,7 +111,9 @@ public sealed class VersionsController : OpenShockControllerBase
         return Ok(FirmwareResponseMapper.ToReleaseDto(version, boards, cdnBase));
     }
 
+    /// <param name="firmwareVersion">Published firmware version, e.g. <c>1.4.0</c>.</param>
     /// <param name="board">Board name (e.g. <c>"Wemos-D1-Mini-ESP32"</c>) or board id.</param>
+    /// <param name="ct">Cancellation token.</param>
     [HttpGet("{firmwareVersion}/{board}")]
     [CacheControl(86400, immutable: true)]
     public async Task<IActionResult> GetVersionForBoard(

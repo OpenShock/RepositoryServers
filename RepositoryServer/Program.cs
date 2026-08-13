@@ -181,19 +181,25 @@ builder.Services.AddControllers().AddJsonOptions(x =>
     x.JsonSerializerOptions.Converters.Add(new SemVersionConverter());
 });
 
-var apiVersioningBuilder = builder.Services.AddApiVersioning(options =>
-{
-    options.DefaultApiVersion = new ApiVersion(1, 0);
-    options.AssumeDefaultVersionWhenUnspecified = true;
-});
-
-apiVersioningBuilder.AddApiExplorer(setup =>
-{
-    setup.GroupNameFormat = "VVV";
-    setup.SubstituteApiVersionInUrl = true;
-    setup.DefaultApiVersion = new ApiVersion(1, 0);
-    setup.AssumeDefaultVersionWhenUnspecified = true;
-});
+builder.Services
+    .AddApiVersioning(options =>
+    {
+        options.DefaultApiVersion = new ApiVersion(1, 0);
+        options.AssumeDefaultVersionWhenUnspecified = true;
+    })
+    // Controller-based APIs need the MVC integration to be versioned at all; without it the
+    // [ApiVersion] attributes are inert and every action lands in the default version.
+    .AddMvc()
+    .AddApiExplorer(setup =>
+    {
+        setup.GroupNameFormat = "VVV";
+        setup.SubstituteApiVersionInUrl = true;
+        setup.DefaultApiVersion = new ApiVersion(1, 0);
+        setup.AssumeDefaultVersionWhenUnspecified = true;
+    })
+    // Registers one OpenAPI document per discovered API version, rather than the single hand-named
+    // document this used to declare, which described v1 and left every v2 endpoint undocumented.
+    .AddOpenApi();
 
 // The OAuth redirect_uri is built from the incoming request, so behind an ingress that terminates
 // TLS the server would otherwise send GitHub an http:// callback that does not match the one
@@ -219,8 +225,6 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddWebEncoders();
 builder.Services.AddProblemDetails();
 builder.Services.TryAddSingleton<TimeProvider>(provider => TimeProvider.System);
-
-builder.Services.AddOpenApi("1");
 
 // Any origin may read the public firmware catalog: the flashtool and CLI tools are cross-origin by
 // nature and the data is public anyway.
@@ -402,14 +406,15 @@ app.UseOpenTelemetryPrometheusScrapingEndpoint(context =>
 // MapRazorComponents refuses to serve without the middleware present.
 app.UseAntiforgery();
 
-app.MapOpenApi();
+app.MapOpenApi().WithDocumentPerVersion();
 app.MapControllers();
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
-app.MapScalarApiReference(options => options.AddDocument("1"));
+// One entry per API version, matching the documents WithDocumentPerVersion serves.
+app.MapScalarApiReference(options =>
+{
+    options.AddDocument("1");
+    options.AddDocument("2");
+});
 
 app.Run();
-
-// Expose the auto-generated Program type so WebApplicationFactory<Program> in the
-// integration test project can bootstrap the host.
-public partial class Program { }

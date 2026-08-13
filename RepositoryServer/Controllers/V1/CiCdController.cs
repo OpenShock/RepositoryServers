@@ -1,15 +1,17 @@
-using System.IO.Compression;
-using System.Security.Claims;
-using System.Security.Cryptography;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using OpenShock.Internal.Common;
 using OpenShock.RepositoryServer.Config;
 using OpenShock.RepositoryServer.Problems;
 using OpenShock.RepositoryServer.RepoServerDb;
 using OpenShock.RepositoryServer.Services;
 using Semver;
+using System.IO.Compression;
+using System.Net.Mime;
+using System.Security.Claims;
+using System.Security.Cryptography;
 using Version = OpenShock.RepositoryServer.RepoServerDb.Version;
 
 namespace OpenShock.RepositoryServer.Controllers.V1;
@@ -17,6 +19,7 @@ namespace OpenShock.RepositoryServer.Controllers.V1;
 [ApiVersion("1.0")]
 [ApiController]
 [Route("/{version:apiVersion}/cicd")]
+[Consumes(MediaTypeNames.Application.Json)]
 // Ingestion is machine-to-machine and authenticated by GitHub OIDC, not something a reader of the
 // API reference can call. Hidden so the published surface is only what consumers actually consume.
 [ApiExplorerSettings(IgnoreApi = true)]
