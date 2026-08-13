@@ -2,7 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using OneOf;
 using OneOf.Types;
 using OpenShock.RepositoryServer.RepoServerDb;
-using Version = OpenShock.RepositoryServer.RepoServerDb.Version;
+using OpenShock.RepositoryServer.RepoServerDb.Models;
+using Version = OpenShock.RepositoryServer.RepoServerDb.Models.Version;
 
 namespace OpenShock.RepositoryServer.Services.Admin;
 
@@ -47,7 +48,9 @@ public sealed class ModuleAdminService
 
         if (module is null)
         {
-            module = new Module { Id = normalizedId };
+            // Name and Description are required, so they are set here rather than only in the
+            // assignments below, which exist to cover the update path.
+            module = new Module { Id = normalizedId, Name = name, Description = description };
             _db.Modules.Add(module);
         }
 

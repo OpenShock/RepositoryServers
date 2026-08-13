@@ -1,4 +1,5 @@
 using OpenShock.RepositoryServer.RepoServerDb;
+using OpenShock.RepositoryServer.RepoServerDb.Models;
 using OpenShock.RepositoryServer.Utils;
 
 namespace OpenShock.RepositoryServer.Models.Discord;

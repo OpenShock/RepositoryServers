@@ -1,6 +1,8 @@
 using EntityFramework.Exceptions.PostgreSQL;
 using Microsoft.EntityFrameworkCore;
 using OpenShock.RepositoryServer.Enums;
+using OpenShock.RepositoryServer.RepoServerDb.Models;
+using Version = OpenShock.RepositoryServer.RepoServerDb.Models.Version;
 
 namespace OpenShock.RepositoryServer.RepoServerDb;
 
@@ -9,10 +11,10 @@ namespace OpenShock.RepositoryServer.RepoServerDb;
 /// </summary>
 public sealed class MigrationOpenShockContext : RepoServerContext
 {
-    private readonly string? _connectionString = null;
+    private readonly string? _connectionString;
     private readonly bool _debug;
     private readonly bool _migrationTool;
-    private readonly ILoggerFactory? _loggerFactory = null;
+    private readonly ILoggerFactory? _loggerFactory;
 
     public MigrationOpenShockContext()
     {
@@ -45,7 +47,7 @@ public sealed class MigrationOpenShockContext : RepoServerContext
     }
 }
 
-public partial class RepoServerContext : DbContext
+public class RepoServerContext : DbContext
 {
     public RepoServerContext()
     {

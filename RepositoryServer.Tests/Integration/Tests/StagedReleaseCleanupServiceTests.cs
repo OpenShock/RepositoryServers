@@ -5,6 +5,7 @@ using Microsoft.Extensions.Time.Testing;
 using OpenShock.RepositoryServer.Config;
 using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.RepoServerDb;
+using OpenShock.RepositoryServer.RepoServerDb.Models;
 using OpenShock.RepositoryServer.Services;
 
 namespace OpenShock.RepositoryServer.Tests.Integration.Tests;

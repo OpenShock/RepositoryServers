@@ -131,26 +131,23 @@ public static class ChangelogParser
     {
         // "**Title** — content" → ("Title", "content")
         // Both em dash (—) and simple hyphen separator " - " are accepted.
-        if (item.StartsWith("**", StringComparison.Ordinal))
+        if (!item.StartsWith("**", StringComparison.Ordinal)) return (sectionTitle, item);
+        
+        var closeIdx = item.IndexOf("**", 2, StringComparison.Ordinal);
+        if (closeIdx <= 2) return (sectionTitle, item);
+        
+        var title = item[2..closeIdx].Trim();
+        var rest = item[(closeIdx + 2)..].TrimStart();
+
+        if (rest.StartsWith("—", StringComparison.Ordinal) || rest.StartsWith("–", StringComparison.Ordinal)) rest = rest[1..].TrimStart();
+        else if (rest.StartsWith("- ", StringComparison.Ordinal)) rest = rest[2..];
+        else if (rest.StartsWith("-", StringComparison.Ordinal)) rest = rest[1..].TrimStart();
+
+        if (title.Length <= 0)
         {
-            var closeIdx = item.IndexOf("**", 2, StringComparison.Ordinal);
-            if (closeIdx > 2)
-            {
-                var title = item.Substring(2, closeIdx - 2).Trim();
-                var rest = item[(closeIdx + 2)..].TrimStart();
-
-                if (rest.StartsWith("—", StringComparison.Ordinal)) rest = rest[1..].TrimStart();
-                else if (rest.StartsWith("–", StringComparison.Ordinal)) rest = rest[1..].TrimStart();
-                else if (rest.StartsWith("- ", StringComparison.Ordinal)) rest = rest[2..];
-                else if (rest.StartsWith("-", StringComparison.Ordinal)) rest = rest[1..].TrimStart();
-
-                if (title.Length > 0)
-                {
-                    return (title, rest);
-                }
-            }
+            return (sectionTitle, item);
         }
 
-        return (sectionTitle, item);
+        return (title, rest);
     }
 }

@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.Models.Firmware;
 using OpenShock.RepositoryServer.RepoServerDb;
+using OpenShock.RepositoryServer.RepoServerDb.Models;
 
 namespace OpenShock.RepositoryServer.Tests.Integration.Tests;
 
@@ -23,8 +24,14 @@ public class PublicBoardsAndChipsControllerTests
         await using (var scope = Factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RepoServerContext>();
-            var chipA = new FirmwareChip { Id = Guid.NewGuid(), Name = "ESP32-S3" };
-            var chipB = new FirmwareChip { Id = Guid.NewGuid(), Name = "ESP32-C3" };
+            var chipA = new FirmwareChip
+            {
+                Id = Guid.NewGuid(), Name = "ESP32-S3", Architecture = FirmwareChipArchitecture.Xtensa
+            };
+            var chipB = new FirmwareChip
+            {
+                Id = Guid.NewGuid(), Name = "ESP32-C3", Architecture = FirmwareChipArchitecture.RiscV
+            };
             db.FirmwareChips.Add(chipA);
             db.FirmwareChips.Add(chipB);
             db.FirmwareBoards.Add(new FirmwareBoard
@@ -59,7 +66,10 @@ public class PublicBoardsAndChipsControllerTests
         await using (var scope = Factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RepoServerContext>();
-            var chip = new FirmwareChip { Id = Guid.NewGuid(), Name = "ESP32" };
+            var chip = new FirmwareChip
+            {
+                Id = Guid.NewGuid(), Name = "ESP32", Architecture = FirmwareChipArchitecture.Xtensa
+            };
             db.FirmwareChips.Add(chip);
             db.FirmwareBoards.Add(new FirmwareBoard
             {

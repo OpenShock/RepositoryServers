@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using OpenShock.Internal.Common.Utils;
 using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.RepoServerDb;
 
@@ -72,7 +73,7 @@ public sealed class DiscordNotificationService : IDiscordNotificationService
             embeds = new object[] { new { title, description, color } }
         });
 
-        _ = Task.Run(async () =>
+        OsTask.Run(async () =>
         {
             try
             {

@@ -18,6 +18,7 @@ using System.Net.Mime;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text.Json;
+using OpenShock.RepositoryServer.RepoServerDb.Models;
 
 namespace OpenShock.RepositoryServer.Controllers.V2.Firmware;
 

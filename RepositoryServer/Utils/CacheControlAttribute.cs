@@ -26,11 +26,11 @@ public sealed class CacheControlAttribute : ActionFilterAttribute
             var value = Immutable
                 ? $"public, max-age={MaxAgeSeconds}, immutable"
                 : $"public, max-age={MaxAgeSeconds}";
-            context.HttpContext.Response.Headers["Cache-Control"] = value;
+            context.HttpContext.Response.Headers.CacheControl = value;
         }
         else
         {
-            context.HttpContext.Response.Headers["Cache-Control"] = "no-store";
+            context.HttpContext.Response.Headers.CacheControl = "no-store";
         }
 
         base.OnResultExecuting(context);

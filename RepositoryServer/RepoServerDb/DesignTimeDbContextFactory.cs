@@ -2,7 +2,7 @@
 
 namespace OpenShock.RepositoryServer.RepoServerDb;
 
-public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<MigrationOpenShockContext>
+public sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<MigrationOpenShockContext>
 {
     public MigrationOpenShockContext CreateDbContext(string[] args)
     {

@@ -1,4 +1,5 @@
 using OpenShock.RepositoryServer.Enums;
+using OpenShock.RepositoryServer.RepoServerDb.Models;
 using OpenShock.RepositoryServer.Utils;
 
 namespace OpenShock.RepositoryServer.Models.Firmware;
@@ -17,7 +18,7 @@ public sealed record RepositoryDto
     /// <summary>Wire form of the granted scopes, e.g. <c>["publish_firmware"]</c>.</summary>
     public required List<string> Scopes { get; init; }
 
-    public static RepositoryDto From(RepoServerDb.SourceRepository r) => new()
+    public static RepositoryDto From(SourceRepository r) => new()
     {
         Id = r.Id,
         Provider = r.Provider.ToString().ToLowerInvariant(),

@@ -5,6 +5,7 @@ using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.RepoServerDb;
+using OpenShock.RepositoryServer.RepoServerDb.Models;
 
 namespace OpenShock.RepositoryServer.Tests.Integration.Tests;
 

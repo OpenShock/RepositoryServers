@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using OneOf.Types;
 using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.RepoServerDb;
+using OpenShock.RepositoryServer.RepoServerDb.Models;
 using OpenShock.RepositoryServer.Services.Admin;
 
 namespace OpenShock.RepositoryServer.Tests.Integration.Tests;

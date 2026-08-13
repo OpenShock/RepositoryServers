@@ -9,6 +9,7 @@ using OpenShock.RepositoryServer.Problems;
 using OpenShock.RepositoryServer.RepoServerDb;
 using OpenShock.RepositoryServer.Utils;
 using System.Net.Mime;
+using OpenShock.RepositoryServer.RepoServerDb.Models;
 
 namespace OpenShock.RepositoryServer.Controllers.V2.Firmware;
 

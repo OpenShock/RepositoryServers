@@ -4,6 +4,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.RepoServerDb;
+using OpenShock.RepositoryServer.RepoServerDb.Models;
 
 namespace OpenShock.RepositoryServer.Tests.Integration.Tests;
 
@@ -219,7 +220,10 @@ public class VersionsControllerTests
         await using var scope = Factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RepoServerContext>();
 
-        var chip = new FirmwareChip { Id = Guid.NewGuid(), Name = "ESP32" };
+        var chip = new FirmwareChip
+        {
+            Id = Guid.NewGuid(), Name = "ESP32", Architecture = FirmwareChipArchitecture.Xtensa
+        };
         var board = new FirmwareBoard
         {
             Id = Guid.NewGuid(),

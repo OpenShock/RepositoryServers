@@ -3,6 +3,7 @@ using OneOf;
 using OneOf.Types;
 using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.RepoServerDb;
+using OpenShock.RepositoryServer.RepoServerDb.Models;
 
 namespace OpenShock.RepositoryServer.Services.Admin;
 

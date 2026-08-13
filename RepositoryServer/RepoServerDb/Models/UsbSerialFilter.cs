@@ -1,4 +1,4 @@
-namespace OpenShock.RepositoryServer.RepoServerDb;
+namespace OpenShock.RepositoryServer.RepoServerDb.Models;
 
 /// <summary>
 /// WebSerial filter rule. Either a vendor-wide match (null <see cref="Pid"/>) or a specific
@@ -7,10 +7,10 @@ namespace OpenShock.RepositoryServer.RepoServerDb;
 /// Unique constraint on <c>(vid, pid)</c> with PostgreSQL <c>NULLS NOT DISTINCT</c>
 /// (declared as raw SQL in the migration — EF Core has no fluent shortcut for it).
 /// </summary>
-public class UsbSerialFilter
+public sealed class UsbSerialFilter
 {
     public Guid Id { get; set; }
-    public int Vid { get; set; }
+    public required int Vid { get; set; }
     public int? Pid { get; set; }
     public string? Description { get; set; }
 }

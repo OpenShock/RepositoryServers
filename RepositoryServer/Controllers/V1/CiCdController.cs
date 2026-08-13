@@ -12,7 +12,7 @@ using System.IO.Compression;
 using System.Net.Mime;
 using System.Security.Claims;
 using System.Security.Cryptography;
-using Version = OpenShock.RepositoryServer.RepoServerDb.Version;
+using Version = OpenShock.RepositoryServer.RepoServerDb.Models.Version;
 
 namespace OpenShock.RepositoryServer.Controllers.V1;
 

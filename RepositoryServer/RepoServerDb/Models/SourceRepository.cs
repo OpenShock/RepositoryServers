@@ -1,6 +1,6 @@
 using OpenShock.RepositoryServer.Enums;
 
-namespace OpenShock.RepositoryServer.RepoServerDb;
+namespace OpenShock.RepositoryServer.RepoServerDb.Models;
 
 /// <summary>
 /// Shared source-code repository reference. Today only firmware versions reference this;
@@ -9,12 +9,12 @@ namespace OpenShock.RepositoryServer.RepoServerDb;
 /// Table: <c>repositories</c>. Doubles as the publish allowlist: rows are created only by an
 /// administrator, and an OIDC token from an unregistered owner/repo pair is rejected.
 /// </summary>
-public class SourceRepository
+public sealed class SourceRepository
 {
     public Guid Id { get; set; }
-    public RepositoryProvider Provider { get; set; }
-    public string Owner { get; set; } = null!;
-    public string Repo { get; set; } = null!;
+    public required RepositoryProvider Provider { get; set; }
+    public required string Owner { get; set; }
+    public required string Repo { get; set; }
 
     /// <summary>
     /// What this repository may publish. Empty means it is registered but cannot publish anything,
@@ -22,6 +22,6 @@ public class SourceRepository
     /// </summary>
     public RepositoryScope[] Scopes { get; set; } = [];
 
-    public virtual ICollection<FirmwareVersion> FirmwareVersions { get; set; } = new List<FirmwareVersion>();
-    public virtual ICollection<FirmwareRelease> FirmwareReleases { get; set; } = new List<FirmwareRelease>();
+    public ICollection<FirmwareVersion> FirmwareVersions { get; } = [];
+    public ICollection<FirmwareRelease> FirmwareReleases { get; } = [];
 }

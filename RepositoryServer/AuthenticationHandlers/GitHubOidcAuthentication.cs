@@ -1,10 +1,10 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.RepoServerDb;
 using OpenShock.RepositoryServer.Utils;
+using System.Security.Claims;
 
 namespace OpenShock.RepositoryServer.AuthenticationHandlers;
 

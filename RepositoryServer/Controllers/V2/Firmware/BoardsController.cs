@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OpenShock.Internal.Common;
 using OpenShock.RepositoryServer.Models.Firmware;
+using OpenShock.RepositoryServer.RepoServerDb.Models;
 using OpenShock.RepositoryServer.RepoServerDb;
 using OpenShock.RepositoryServer.Utils;
 using System.Net.Mime;
