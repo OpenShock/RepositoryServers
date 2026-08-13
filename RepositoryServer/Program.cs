@@ -173,7 +173,10 @@ switch (config.Firmware.Storage.Type)
 }
 
 // <---- Discord notifications ---->
-builder.Services.AddHttpClient<IDiscordNotificationService, DiscordNotificationService>();
+// Notifications outlive the request that triggers them, so the service is a singleton that resolves
+// its own HttpClient and DbContext rather than capturing request-scoped ones.
+builder.Services.AddHttpClient(nameof(DiscordNotificationService));
+builder.Services.AddSingleton<IDiscordNotificationService, DiscordNotificationService>();
 
 // <---- Background cleanup ---->
 builder.Services.AddHostedService<StagedReleaseCleanupService>();

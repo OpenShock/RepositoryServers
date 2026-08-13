@@ -15,5 +15,4 @@ public class ApiConfig
     /// </summary>
     [Required] public required CiCdConfig CiCd { get; init; }
     public MetricsConfig Metrics { get; init; } = new();
-    public DiscordConfig Discord { get; init; } = new();
 }

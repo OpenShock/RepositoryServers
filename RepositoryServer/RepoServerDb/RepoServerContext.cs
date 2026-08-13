@@ -73,6 +73,7 @@ public partial class RepoServerContext : DbContext
         npgsqlBuilder.MapEnum<RepositoryProvider>("repository_provider");
         npgsqlBuilder.MapEnum<RepositoryScope>("repository_scope");
         npgsqlBuilder.MapEnum<AdvisorySeverity>("advisory_severity");
+        npgsqlBuilder.MapEnum<DiscordNotificationEvent>("discord_notification_event");
     }
 
     public static void ConfigureOptionsBuilder(DbContextOptionsBuilder optionsBuilder, string connectionString,
@@ -119,6 +120,9 @@ public partial class RepoServerContext : DbContext
     // Firmware advisories shown on the manifest endpoint
     public virtual DbSet<FirmwareAdvisory> FirmwareAdvisories { get; set; }
 
+    // Discord notification targets
+    public virtual DbSet<DiscordWebhook> DiscordWebhooks { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Shared source-code repository registry
@@ -140,6 +144,18 @@ public partial class RepoServerContext : DbContext
             // exist as separate grants while the OIDC lookup only ever finds one of them.
             entity.HasIndex(e => new { e.Provider, e.Owner, e.Repo })
                 .HasDatabaseName("ix_repositories_provider_owner_repo");
+        });
+
+        modelBuilder.Entity<DiscordWebhook>(entity =>
+        {
+            entity.HasKey(e => e.Id).HasName("discord_webhooks_pkey");
+            entity.ToTable("discord_webhooks");
+
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Name).HasMaxLength(128).HasColumnName("name");
+            entity.Property(e => e.Url).HasMaxLength(512).HasColumnName("url");
+            entity.Property(e => e.Events).HasColumnName("events");
+            entity.Property(e => e.Enabled).HasDefaultValue(true).HasColumnName("enabled");
         });
 
         // Desktop module entities (unchanged — source traceability is not yet wired here)

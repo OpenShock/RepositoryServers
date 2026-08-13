@@ -14,6 +14,7 @@ namespace OpenShock.RepositoryServer.Migrations
         {
             migrationBuilder.AlterDatabase()
                 .Annotation("Npgsql:Enum:advisory_severity", "critical,info,warning")
+                .Annotation("Npgsql:Enum:discord_notification_event", "desktop_module_version_published,firmware_release_published,release_notes_need_editing,staged_release_expired")
                 .Annotation("Npgsql:Enum:firmware_artifact_type", "app,bootloader,merged,partitions,static_fs")
                 .Annotation("Npgsql:Enum:firmware_chip_architecture", "risc_v,xtensa")
                 .Annotation("Npgsql:Enum:firmware_release_note_type", "breaking,info,section,warning")
@@ -27,6 +28,21 @@ namespace OpenShock.RepositoryServer.Migrations
                 table: "modules",
                 type: "uuid",
                 nullable: true);
+
+            migrationBuilder.CreateTable(
+                name: "discord_webhooks",
+                columns: table => new
+                {
+                    id = table.Column<Guid>(type: "uuid", nullable: false),
+                    name = table.Column<string>(type: "character varying(128)", maxLength: 128, nullable: false),
+                    url = table.Column<string>(type: "character varying(512)", maxLength: 512, nullable: false),
+                    events = table.Column<DiscordNotificationEvent[]>(type: "discord_notification_event[]", nullable: false),
+                    enabled = table.Column<bool>(type: "boolean", nullable: false, defaultValue: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("discord_webhooks_pkey", x => x.id);
+                });
 
             migrationBuilder.CreateTable(
                 name: "firmware_advisories",
@@ -399,6 +415,9 @@ namespace OpenShock.RepositoryServer.Migrations
             // Expression and partial indexes have no model-builder equivalent, so they are created
             // here in raw SQL. The corresponding model-level indexes above are deliberately declared
             // non-unique: the real constraint is the one below.
+            //
+            // NOTE: `dotnet ef migrations remove` discards these, because they exist only here and not
+            // in the model. If this migration is ever regenerated, re-add them.
 
             // Board and chip names are resolved case-insensitively on the public endpoints. With only
             // a case-sensitive unique index, "ESP32-Core" and "esp32-core" could coexist and
@@ -452,6 +471,9 @@ namespace OpenShock.RepositoryServer.Migrations
                 table: "modules");
 
             migrationBuilder.DropTable(
+                name: "discord_webhooks");
+
+            migrationBuilder.DropTable(
                 name: "firmware_advisories");
 
             migrationBuilder.DropTable(
@@ -503,6 +525,7 @@ namespace OpenShock.RepositoryServer.Migrations
 
             migrationBuilder.AlterDatabase()
                 .OldAnnotation("Npgsql:Enum:advisory_severity", "critical,info,warning")
+                .OldAnnotation("Npgsql:Enum:discord_notification_event", "desktop_module_version_published,firmware_release_published,release_notes_need_editing,staged_release_expired")
                 .OldAnnotation("Npgsql:Enum:firmware_artifact_type", "app,bootloader,merged,partitions,static_fs")
                 .OldAnnotation("Npgsql:Enum:firmware_chip_architecture", "risc_v,xtensa")
                 .OldAnnotation("Npgsql:Enum:firmware_release_note_type", "breaking,info,section,warning")

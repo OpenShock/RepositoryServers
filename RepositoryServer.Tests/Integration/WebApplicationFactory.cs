@@ -111,6 +111,7 @@ public sealed class WebApplicationFactory
                 firmware_advisories,
                 usb_serial_filters,
                 usb_devices,
+                discord_webhooks,
                 versions,
                 modules,
                 repositories

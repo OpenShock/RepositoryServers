@@ -13,7 +13,7 @@ using OpenShock.RepositoryServer.RepoServerDb;
 namespace OpenShock.RepositoryServer.Migrations
 {
     [DbContext(typeof(MigrationOpenShockContext))]
-    [Migration("20260813121747_UnifiedRepositoryServer")]
+    [Migration("20260813123629_UnifiedRepositoryServer")]
     partial class UnifiedRepositoryServer
     {
         /// <inheritdoc />
@@ -25,6 +25,7 @@ namespace OpenShock.RepositoryServer.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "advisory_severity", new[] { "critical", "info", "warning" });
+            NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "discord_notification_event", new[] { "desktop_module_version_published", "firmware_release_published", "release_notes_need_editing", "staged_release_expired" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "firmware_artifact_type", new[] { "app", "bootloader", "merged", "partitions", "static_fs" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "firmware_chip_architecture", new[] { "risc_v", "xtensa" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "firmware_release_note_type", new[] { "breaking", "info", "section", "warning" });
@@ -33,6 +34,42 @@ namespace OpenShock.RepositoryServer.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "repository_provider", new[] { "github" });
             NpgsqlModelBuilderExtensions.HasPostgresEnum(modelBuilder, "repository_scope", new[] { "publish_firmware", "publish_modules" });
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
+
+            modelBuilder.Entity("OpenShock.RepositoryServer.RepoServerDb.DiscordWebhook", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Enabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("enabled");
+
+                    b.PrimitiveCollection<DiscordNotificationEvent[]>("Events")
+                        .IsRequired()
+                        .HasColumnType("discord_notification_event[]")
+                        .HasColumnName("events");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)")
+                        .HasColumnName("url");
+
+                    b.HasKey("Id")
+                        .HasName("discord_webhooks_pkey");
+
+                    b.ToTable("discord_webhooks", (string)null);
+                });
 
             modelBuilder.Entity("OpenShock.RepositoryServer.RepoServerDb.FirmwareAdvisory", b =>
                 {

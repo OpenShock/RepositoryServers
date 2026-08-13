@@ -25,7 +25,7 @@ RepositoryServer/                    # Main web API project
     GitHubOidcAuthentication.cs      # JwtBearer + GitHub OIDC claim handling
                                      # auto-upserts repositories rows on first use
   Config/                            # ApiConfig, DbConfig, RepoConfig, MetricsConfig,
-                                     # FirmwareConfig, FirmwareCiCdConfig, FirmwareAdvisoryConfig, DiscordConfig
+                                     # FirmwareConfig, CiCdConfig, FirmwareAdvisoryConfig
   Controllers/
     OpenShockControllerBase.cs       # Shared base controller
     V1/                              # Desktop module endpoints (V1)
@@ -112,7 +112,11 @@ docker/
 - **CORS**: Allow all origins/methods/headers
 - **Metrics**: Prometheus at `/metrics`, restricted to private networks
 - **Notifications**: Fire-and-forget Discord webhooks via `IDiscordNotificationService`.
-  Empty `Discord.WebhookUrls` → no-op.
+  Targets live in the `discord_webhooks` table, each subscribing to specific events, managed via
+  `/v2/admin/discord-webhooks`. The URL is a credential so it is write-only — responses return a
+  masked form. The service is a **singleton** that resolves its own `HttpClient` and `DbContext`:
+  notifications outlive the request that triggers them, so capturing request-scoped ones dropped
+  them non-deterministically. No subscribed webhooks → no-op.
 
 ## Database
 - PostgreSQL (15+ required for `NULLS NOT DISTINCT` on `usb_serial_filters`), connection in `ApiConfig.Db.Conn`

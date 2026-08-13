@@ -1,5 +1,8 @@
+using System.Text;
 using System.Text.Json;
-using OpenShock.RepositoryServer.Config;
+using Microsoft.EntityFrameworkCore;
+using OpenShock.RepositoryServer.Enums;
+using OpenShock.RepositoryServer.RepoServerDb;
 
 namespace OpenShock.RepositoryServer.Services;
 
@@ -9,75 +12,107 @@ public sealed class DiscordNotificationService : IDiscordNotificationService
     private const int ColorYellow = 0xF1C40F;
     private const int ColorRed = 0xE74C3C;
 
-    private readonly HttpClient _http;
-    private readonly DiscordConfig _config;
+    /// <summary>Ceiling on a fire-and-forget delivery, since it no longer inherits a request timeout.</summary>
+    private static readonly TimeSpan DeliveryTimeout = TimeSpan.FromSeconds(15);
+
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IDbContextFactory<RepoServerContext> _dbFactory;
     private readonly ILogger<DiscordNotificationService> _logger;
 
-    public DiscordNotificationService(HttpClient http, ApiConfig apiConfig, ILogger<DiscordNotificationService> logger)
+    public DiscordNotificationService(
+        IHttpClientFactory httpClientFactory,
+        IDbContextFactory<RepoServerContext> dbFactory,
+        ILogger<DiscordNotificationService> logger)
     {
-        _http = http;
-        _config = apiConfig.Discord;
+        _httpClientFactory = httpClientFactory;
+        _dbFactory = dbFactory;
         _logger = logger;
     }
 
     public Task NotifyFirmwareReleasePublishedAsync(string version, string channel, string commitHash, CancellationToken ct) =>
-        PostEmbedsAsync("Firmware release published",
+        DispatchAsync(DiscordNotificationEvent.FirmwareReleasePublished,
+            "Firmware release published",
             $"Version `{version}` published on channel `{channel}`.\nCommit: `{commitHash[..Math.Min(7, commitHash.Length)]}`",
-            ColorGreen, ct);
+            ColorGreen);
 
     public Task NotifyDesktopModuleVersionPublishedAsync(string moduleId, string version, string? commitHash, CancellationToken ct) =>
-        PostEmbedsAsync("Desktop module version published",
+        DispatchAsync(DiscordNotificationEvent.DesktopModuleVersionPublished,
+            "Desktop module version published",
             $"Module `{moduleId}` version `{version}` published." +
             (!string.IsNullOrEmpty(commitHash) ? $"\nCommit: `{commitHash[..Math.Min(7, commitHash.Length)]}`" : string.Empty),
-            ColorGreen, ct);
+            ColorGreen);
 
     public Task NotifyReleaseNotesNeedEditingAsync(Guid releaseId, string version, string channel, CancellationToken ct) =>
-        PostEmbedsAsync("Release notes need editing",
+        DispatchAsync(DiscordNotificationEvent.ReleaseNotesNeedEditing,
+            "Release notes need editing",
             $"Release `{releaseId}` (version `{version}`, channel `{channel}`) was created with an invalid changelog and needs manual review.",
-            ColorYellow, ct);
+            ColorYellow);
 
     public Task NotifyStagedReleaseExpiredAsync(Guid releaseId, string version, string channel, CancellationToken ct) =>
-        PostEmbedsAsync("Staged release expired",
+        DispatchAsync(DiscordNotificationEvent.StagedReleaseExpired,
+            "Staged release expired",
             $"Release `{releaseId}` (version `{version}`, channel `{channel}`) was aborted because its TTL expired.",
-            ColorRed, ct);
+            ColorRed);
 
-    private Task PostEmbedsAsync(string title, string description, int color, CancellationToken ct)
+    /// <summary>
+    /// Queues delivery to every enabled webhook subscribed to <paramref name="notificationEvent"/>.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately takes no <see cref="CancellationToken"/> from the caller. This is fire-and-forget
+    /// work that outlives the request that triggered it, so inheriting the request's token meant a
+    /// notification was dropped the moment the response completed — including the "needs editing"
+    /// alert, which is the only signal that a release is stuck. For the same reason it resolves its
+    /// own <see cref="HttpClient"/> and <see cref="RepoServerContext"/> rather than capturing
+    /// request-scoped ones, which were disposed out from under it.
+    /// </remarks>
+    private Task DispatchAsync(DiscordNotificationEvent notificationEvent, string title, string description, int color)
     {
-        if (_config.WebhookUrls.Count == 0)
-        {
-            return Task.CompletedTask;
-        }
-
         var payload = JsonSerializer.Serialize(new
         {
-            embeds = new object[]
-            {
-                new { title, description, color }
-            }
+            embeds = new object[] { new { title, description, color } }
         });
 
-        foreach (var url in _config.WebhookUrls)
+        _ = Task.Run(async () =>
         {
-            _ = Task.Run(async () =>
+            try
             {
-                try
+                using var timeout = new CancellationTokenSource(DeliveryTimeout);
+
+                await using var db = await _dbFactory.CreateDbContextAsync(timeout.Token);
+                var urls = await db.DiscordWebhooks
+                    .Where(w => w.Enabled && w.Events.Contains(notificationEvent))
+                    .Select(w => w.Url)
+                    .ToListAsync(timeout.Token);
+
+                if (urls.Count == 0) return;
+
+                using var http = _httpClientFactory.CreateClient(nameof(DiscordNotificationService));
+
+                foreach (var url in urls)
                 {
-                    using var request = new HttpRequestMessage(HttpMethod.Post, url)
+                    try
                     {
-                        Content = new StringContent(payload, System.Text.Encoding.UTF8, "application/json")
-                    };
-                    using var response = await _http.SendAsync(request, ct);
-                    if (!response.IsSuccessStatusCode)
+                        using var content = new StringContent(payload, Encoding.UTF8, "application/json");
+                        using var response = await http.PostAsync(url, content, timeout.Token);
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            // The URL is a credential, so it is never logged.
+                            _logger.LogWarning(
+                                "Discord webhook returned {Status} for {Event}",
+                                (int)response.StatusCode, notificationEvent);
+                        }
+                    }
+                    catch (Exception ex)
                     {
-                        _logger.LogWarning("Discord webhook returned {Status}", (int)response.StatusCode);
+                        _logger.LogWarning(ex, "Failed to post Discord notification for {Event}", notificationEvent);
                     }
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to post Discord notification");
-                }
-            }, ct);
-        }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to dispatch Discord notifications for {Event}", notificationEvent);
+            }
+        });
 
         return Task.CompletedTask;
     }
