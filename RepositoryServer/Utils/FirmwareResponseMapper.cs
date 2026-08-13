@@ -9,10 +9,10 @@ namespace OpenShock.RepositoryServer.Utils;
 /// </summary>
 public static class FirmwareResponseMapper
 {
-    public static FirmwareArtifactDto ToArtifactDto(FirmwareArtifact artifact, string version, string cdnBase) => new()
+    public static FirmwareArtifactDto ToArtifactDto(FirmwareArtifact artifact, string version, string boardName, string cdnBase) => new()
     {
         Type = artifact.ArtifactType.ToString().ToLowerInvariant(),
-        Url = $"{cdnBase}/{version}/{artifact.BoardId}/{FirmwareArtifactFileNames.GetFileName(artifact.ArtifactType)}",
+        Url = FirmwareArtifactFileNames.BuildUrl(cdnBase, version, boardName, artifact.ArtifactType),
         Sha256Hash = Convert.ToHexString(artifact.HashSha256),
         FileSize = artifact.FileSize
     };
@@ -21,13 +21,13 @@ public static class FirmwareResponseMapper
     {
         var boardLookup = boardsById.ToDictionary(b => b.Id);
 
-        var boardMap = new Dictionary<Guid, FirmwareBoardDetailDto>();
+        var boardMap = new Dictionary<string, FirmwareBoardDetailDto>();
         foreach (var artifact in version.Artifacts)
         {
             if (!boardLookup.TryGetValue(artifact.BoardId, out var board))
                 continue;
 
-            if (!boardMap.TryGetValue(artifact.BoardId, out var detail))
+            if (!boardMap.TryGetValue(board.Name, out var detail))
             {
                 detail = new FirmwareBoardDetailDto
                 {
@@ -39,10 +39,10 @@ public static class FirmwareResponseMapper
                     Discontinued = board.Discontinued,
                     Artifacts = new List<FirmwareArtifactDto>()
                 };
-                boardMap[artifact.BoardId] = detail;
+                boardMap[board.Name] = detail;
             }
 
-            detail.Artifacts.Add(ToArtifactDto(artifact, version.Version, cdnBase));
+            detail.Artifacts.Add(ToArtifactDto(artifact, version.Version, board.Name, cdnBase));
         }
 
         var releaseNotes = version.ReleaseNotes

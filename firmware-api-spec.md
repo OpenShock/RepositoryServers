@@ -7,7 +7,7 @@ Canonical contract for the repository server's firmware endpoints. All consumers
 | Consumer | Primary endpoints | Constraints |
 |----------|-------------------|-------------|
 | **Web flashtool** (frontend) | manifest, latest, versions | Needs chip name for esptool-js, board discontinuation status, all artifact types for flashing |
-| **ESP32 hub OTA** | latest/{channel}/{boardId}, versions/{version}/{boardId} | Constrained device. Needs artifact URLs + hashes for its board. Knows its own board ID and version. |
+| **ESP32 hub OTA** | latest/{channel}/{board}, versions/{version}/{board} | Constrained device. Needs artifact URLs + hashes for its board. Knows its own board name and version. |
 | **Backend API** (server-to-server) | latest, versions | Structured data for programmatic use |
 | **CLI / external tools** | all public endpoints | Structured data, scriptable, may automate flashing or version queries |
 | **CI/CD pipeline** | releases (ingestion) | Publishes new firmware versions with artifacts and markdown changelog |
@@ -73,7 +73,7 @@ All JSON uses **camelCase** property names. Enums are serialized as **lowercase 
 }
 ```
 
-CDN URL format: `{cdnBaseUrl}/{version}/{boardId}/{filename}`
+CDN URL format: `{cdnBaseUrl}/{version}/{boardName}/{filename}`
 
 Filenames by type: `merged` → `firmware.bin`, `app` → `app.bin`, `bootloader` → `bootloader.bin`, `partitions` → `partitions.bin`, `staticfs` → `staticfs.bin`
 
@@ -257,16 +257,22 @@ Version info for paginated lists. Includes source traceability and release notes
 
 Minimal response for a single board in a single version. No release notes, no chip info, no other boards — just what the firmware needs to download and flash.
 
+`boardId` is the board's canonical **name**, echoed back as stored — see §4.2 for why the name is the
+public identifier. The board's UUID is an internal primary key and never appears on the public surface.
+
 ```jsonc
 {
   "version": "1.5.1",
-  "boardId": "OpenShock-Core-V1",
+  "boardId": "Wemos-D1-Mini-ESP32",
   "artifacts": [
-    { "type": "merged", "url": "https://firmware.openshock.org/1.5.1/OpenShock-Core-V1/firmware.bin", "sha256Hash": "a1b2c3...", "fileSize": 1572864 },
-    { "type": "app", "url": "https://firmware.openshock.org/1.5.1/OpenShock-Core-V1/app.bin", "sha256Hash": "d4e5f6...", "fileSize": 1048576 }
+    { "type": "merged",   "url": "https://firmware.openshock.org/1.5.1/Wemos-D1-Mini-ESP32/firmware.bin", "sha256Hash": "a1b2c3...", "fileSize": 1572864 },
+    { "type": "app",      "url": "https://firmware.openshock.org/1.5.1/Wemos-D1-Mini-ESP32/app.bin",      "sha256Hash": "d4e5f6...", "fileSize": 1048576 },
+    { "type": "staticfs", "url": "https://firmware.openshock.org/1.5.1/Wemos-D1-Mini-ESP32/staticfs.bin", "sha256Hash": "7a8b9c...", "fileSize":  262144 }
   ]
 }
 ```
+
+Consumers should treat `url` as opaque and use it verbatim rather than reconstructing the path.
 
 ### FirmwareManifestResponse
 
@@ -440,7 +446,7 @@ Bootstrap endpoint. Returns everything a consumer needs before making version-sp
 GET /2/firmware/latest/{channel}
 ```
 
-Returns the most recent published release for a channel, with all boards, their artifacts, and release notes. For single-board queries, use `GET /latest/{channel}/{boardId}` instead.
+Returns the most recent published release for a channel, with all boards, their artifacts, and release notes. For single-board queries, use `GET /latest/{channel}/{board}` instead.
 
 | Param | Location | Required | Description |
 |-------|----------|----------|-------------|
@@ -462,7 +468,7 @@ Returns the most recent published release for a channel, with all boards, their 
 #### Single board (lightweight)
 
 ```
-GET /2/firmware/latest/{channel}/{boardId}?version={currentVersion}
+GET /2/firmware/latest/{channel}/{board}?version={currentVersion}
 ```
 
 Minimal response for a single board. No release notes, no other boards. Designed for ESP32 hubs. Supports an optional `version` query param — if the hub is already on the latest version, returns 204 instead.
@@ -470,8 +476,32 @@ Minimal response for a single board. No release notes, no other boards. Designed
 | Param | Location | Required | Description |
 |-------|----------|----------|-------------|
 | `channel` | path | yes | `stable`, `beta`, or `develop` |
-| `boardId` | path | yes | Hub's board ID (e.g. `"OpenShock-Core-V1"`) |
+| `board` | path | yes | Board **name** (e.g. `"Wemos-D1-Mini-ESP32"`) or board UUID |
 | `version` | query | no | Hub's current semver string. If provided and matches latest, returns 204 |
+
+**Board identity**: the board **name** is the public identifier, everywhere — path segment, the
+`boardId` field in responses, and the board segment of artifact URLs and storage keys. A hub sends its
+name because that is the only thing it can know about itself: the name is its PlatformIO env, compiled
+in as `OPENSHOCK_FW_BOARD`.
+
+The board's UUID remains the internal primary key and foreign-key target, and is still accepted on this
+path segment for admin tooling that already holds one. Name matching is case-insensitive; the canonical
+stored spelling comes back in the response.
+
+Because the name is interpolated into storage keys, board names are validated on create/update against
+`^[A-Za-z0-9][A-Za-z0-9._-]*$` — in particular this rejects `/`, which would otherwise let a board name
+reshape the storage path.
+
+> **A canonical board name is permanent once artifacts publish under it.** Published versions are
+> immutable (§4.4) and their artifacts live under the name in force at publish time, so renaming a board
+> in place orphans them.
+
+**Aliases (planned)**: the resolution step is deliberately a single server-side chokepoint, so alternate
+names can be added later without touching storage layout, response shapes, or hubs. An alias table maps
+additional names onto a canonical board; resolution accepts any of them and always returns the canonical
+name, and because consumers use `url` verbatim they never observe the difference. This — not renaming —
+is the supported way to retire a board name: keep the canonical name, add an alias, and hubs compiled
+with either keep updating.
 
 **200 OK** → `FirmwareBoardReleaseResponse`
 
@@ -570,15 +600,16 @@ Published versions are immutable — artifacts and release notes never change af
 #### Single board (lightweight)
 
 ```
-GET /2/firmware/versions/{version}/{boardId}
+GET /2/firmware/versions/{version}/{board}
 ```
 
-Minimal response for a single board. No release notes, no other boards.
+Minimal response for a single board. No release notes, no other boards. Used by hubs for directed
+updates, where the backend names the exact version to install.
 
 | Param | Location | Required | Description |
 |-------|----------|----------|-------------|
 | `version` | path | yes | Exact semver string (e.g. `"1.5.1"`) |
-| `boardId` | path | yes | Board ID (e.g. `"OpenShock-Core-V1"`) |
+| `board` | path | yes | Board name (e.g. `"Wemos-D1-Mini-ESP32"`), or board UUID — see §4.2 |
 
 **200 OK** → `FirmwareBoardReleaseResponse`
 
@@ -640,7 +671,7 @@ Two-phase release process with staging, artifact upload, and publish. Abandoned 
 
 ```
 POST   /2/firmware/releases[?nofail]                     → InitRelease (creates staging release)
-PUT    /2/firmware/releases/{releaseId}/boards/{boardId}  → UploadBoardArtifacts (multipart)
+PUT    /2/firmware/releases/{releaseId}/boards/{board}    → UploadBoardArtifacts (multipart)
 POST   /2/firmware/releases/{releaseId}/publish           → PublishRelease (promotes to live)
 DELETE /2/firmware/releases/{releaseId}                   → AbortRelease (cleanup)
 ```
@@ -656,7 +687,7 @@ POST /2/firmware/releases[?nofail]
   "version": "1.5.1",
   "channel": "stable",
   "releaseDate": "2026-04-15T00:00:00Z",
-  "boards": ["OpenShock-Core-V1", "Wemos-D1-Mini-ESP32"],
+  "boards": ["OpenShock-Core-V1", "Wemos-D1-Mini-ESP32"],   // board names (UUIDs also accepted)
   "changelog": "### Breaking\n**Config format** — Changed to TOML\n\n### Warning\nRequires hub reset\n\n### Info\n- Fixed WiFi reconnection\n- Improved battery life"
 }
 ```
@@ -689,7 +720,7 @@ The `changelog` field replaces the current `releaseNotes` structured array. See 
 #### UploadBoardArtifacts
 
 ```
-PUT /2/firmware/releases/{releaseId}/boards/{boardId}
+PUT /2/firmware/releases/{releaseId}/boards/{board}
 Content-Type: multipart/form-data
 ```
 
@@ -1159,10 +1190,10 @@ All errors use RFC 7807 problem details via `OpenShockProblem`:
 |----------|---------------|-----------|
 | `GET /manifest` | `public, max-age=300` | Contains latest versions; same refresh cadence |
 | `GET /latest/{channel}` | `public, max-age=300` | New releases are infrequent; 5 min staleness is acceptable |
-| `GET /latest/{channel}/{boardId}` | `public, max-age=300` | Same cadence as latest |
+| `GET /latest/{channel}/{board}` | `public, max-age=300` | Same cadence as latest |
 | `GET /versions` | `public, max-age=3600` | Historical list changes rarely |
 | `GET /versions/{version}` | `public, max-age=86400, immutable` | Published versions never change |
-| `GET /versions/{version}/{boardId}` | `public, max-age=86400, immutable` | Published versions never change |
+| `GET /versions/{version}/{board}` | `public, max-age=86400, immutable` | Published versions never change |
 
 All cache headers apply to successful (2xx) responses only. Error responses should not be cached (`Cache-Control: no-store`).
 
@@ -1177,29 +1208,50 @@ All cache headers apply to successful (2xx) responses only. Error responses shou
 **Primary flow**: Call `/latest/{channel}` → get `FirmwareRelease` → let user pick a board → use `chip.name` as the esptool-js chip target → download artifacts from URLs → flash.
 
 **Key fields**:
-- `boards[boardId].chip.name` — pass directly to esptool-js as the chip identifier
-- `boards[boardId].discontinued` — show a warning badge or hide the board in the UI
-- `boards[boardId].artifacts` — all artifact types needed for flashing (merged for simple flash, individual parts for advanced)
+- `boards[boardName].chip.name` — pass directly to esptool-js as the chip identifier
+- `boards[boardName].discontinued` — show a warning badge or hide the board in the UI
+- `boards[boardName].artifacts` — all artifact types needed for flashing (`merged` for USB flashing a blank device, individual parts for OTA)
 - `releaseNotes` — render grouped by `type`, use `title` as a bold prefix when present
 
 **Version picker**: Use `/versions?channel=stable&limit=20` for the version dropdown. Link "view details" to `/versions/{version}`.
 
 ### 9.2. ESP32 hub OTA
 
-**Primary flow (auto-update)**: On boot or periodic timer, call `/latest/{channel}/{boardId}?version={current}` → if 200, pick the `merged` artifact from the `artifacts` array → download → verify SHA-256 → flash → reboot. If 204, do nothing.
+> **The hub must flash `app` + `staticfs`, never `merged`.** A `merged` artifact is a full-flash image
+> built by `esptool merge_bin`, containing the bootloader at `0x1000`, the partition table at `0x8000`,
+> the app at `0x10000` and the filesystem at its partition offset, padded to the full flash size. It is
+> for USB flashing a blank device — writing it into an OTA app slot would write a bootloader image into
+> the app partition and produce an unbootable slot. OTA is per-partition by construction.
 
-**Directed update flow**: When the backend tells the hub to install a specific version, call `/versions/{version}/{boardId}` → pick the `merged` artifact → download → verify → flash → reboot.
+**Primary flow (auto-update)**: On boot or periodic timer, call `/latest/{channel}/{board}?version={current}`.
+On 204, nothing to do. On 200, take the `app` and `staticfs` artifacts and flash each into its own
+partition — verify SHA-256 before flashing, then reboot.
+
+**Directed update flow**: When the backend names a specific version to install, call
+`/versions/{version}/{board}` and flash the same two artifacts.
 
 **Implementation guidance**:
-- The hub must know its own `boardId` (compiled in at build time) and `channel` (configurable via app settings)
-- Parse: `version` (string), `boardId` (string), `artifacts[]` array — find the entry where `type` is `"merged"`
-- Use `sha256Hash` to verify the downloaded binary before flashing
-- Use `fileSize` to pre-allocate OTA partition space and validate download completeness
-- On HTTP 204: no update needed, skip
-- On HTTP 404: board or channel unknown — log warning, do not retry until next cycle
-- On HTTP 4xx/5xx: transient error — back off exponentially
+- The hub knows its own board name — its PlatformIO env, compiled in as `OPENSHOCK_FW_BOARD` — and its
+  `channel`, which is runtime-configurable. Send the name as the `{board}` path segment; see §4.2.
+- Parse: `version` (string), `boardId` (string), `artifacts[]`. Select by `type`: `app` → the next OTA
+  app partition (`esp_ota_get_next_update_partition`), `staticfs` → the filesystem partition.
+- Treat `url` as opaque. Do not rebuild it from `version` and board name — the CDN layout is not part of
+  this contract.
+- Verify `sha256Hash` over the downloaded bytes *before* marking a partition bootable.
+- Use `fileSize` to bounds-check against partition size before writing, and to confirm the download ran
+  to completion.
+- Flash the filesystem first, then the app. The app partition is made bootable last, so a failure part
+  way through leaves the previous app in place.
+- On HTTP 204: already current, skip.
+- On HTTP 404: board or channel unknown — log a warning, do not retry until the next cycle.
+- On HTTP 4xx/5xx: transient — back off exponentially.
 
-**Memory budget**: The JSON response is small. The `artifacts` array typically has 1-3 entries.
+**Version comparison is a string compare, not a semver compare** — see §4.2. The hub sends its current
+version and lets the server decide; it must not skip an update because the offered version sorts lower,
+or rollbacks will not reach it.
+
+**Memory budget**: The response is small — `artifacts` is typically 3-5 entries. Parse it with the
+bundled cJSON rather than buffering a large document.
 
 ### 9.3. Backend API (server-to-server)
 
@@ -1288,8 +1340,8 @@ This affects both firmware and desktop module releases. The `archived` status is
 | `VersionsController.GetVersion` | Same joins as latest controller, return `FirmwareRelease` | Controller |
 | `FirmwareVersionSummary` | Add `source` and `releaseNotes` fields | DTO |
 | `VersionsController.ListVersions` | Add limit/offset/total pagination, include release notes, wrap in `{ versions, total }` | Controller |
-| `LatestController` | Add `GET /latest/{channel}/{boardId}?version=` returning `FirmwareBoardReleaseResponse`, with 204 support | Controller + new DTO |
-| `VersionsController` | Add `GET /versions/{version}/{boardId}` returning `FirmwareBoardReleaseResponse` | Controller + new DTO |
+| `LatestController` | Add `GET /latest/{channel}/{board}?version=` returning `FirmwareBoardReleaseResponse`, with 204 support | Controller + new DTO |
+| `VersionsController` | Add `GET /versions/{version}/{board}` returning `FirmwareBoardReleaseResponse` | Controller + new DTO |
 | New `repositories` table | `id` (GUID), `provider`, `owner`, `repo` with unique constraint on `(provider, owner, repo)` | DB + migration |
 | New `RepositoryDto` | Repository identity DTO | New DTO |
 | New `FirmwareSourceDto` | Repository ref + commitHash, ref, runId + server-constructed URLs | New DTO |

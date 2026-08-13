@@ -28,7 +28,7 @@ public class BoardsAdminControllerTests
 
         var response = await client.PostAsJsonAsync(BasePath, new CreateFirmwareBoardRequest
         {
-            Name = "OpenShock Core V1",
+            Name = "OpenShock-Core-V1",
             ChipId = chipId,
             RequiredArtifactTypes = ["merged"]
         });
@@ -44,11 +44,31 @@ public class BoardsAdminControllerTests
         using var client = Factory.CreateAdminClient();
         var response = await client.PostAsJsonAsync(BasePath, new CreateFirmwareBoardRequest
         {
-            Name = "Phantom Board",
+            Name = "Phantom-Board",
             ChipId = Guid.NewGuid(),
             RequiredArtifactTypes = ["merged"]
         });
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
+    }
+
+    [Test]
+    [Arguments("OpenShock Core V1")]  // spaces
+    [Arguments("core/../etc")]        // path separator — would reshape the storage key
+    [Arguments("-leading-dash")]      // must start alphanumeric
+    [Arguments("emoji-\U0001F600")]
+    public async Task Post_NonUrlSafeName_Returns400(string name)
+    {
+        var chipId = await SeedChipAsync("ESP32");
+        using var client = Factory.CreateAdminClient();
+
+        var response = await client.PostAsJsonAsync(BasePath, new CreateFirmwareBoardRequest
+        {
+            Name = name,
+            ChipId = chipId,
+            RequiredArtifactTypes = ["merged"]
+        });
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
     }
 
     [Test]

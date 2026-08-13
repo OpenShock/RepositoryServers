@@ -7,6 +7,8 @@ namespace OpenShock.RepositoryServer.Models.Firmware;
 public sealed record FirmwareBoardReleaseResponseDto
 {
     public required string Version { get; init; }
-    public required Guid BoardId { get; init; }
+
+    /// <summary>Canonical board name, as stored — e.g. <c>"Wemos-D1-Mini-ESP32"</c>.</summary>
+    public required string BoardId { get; init; }
     public required List<FirmwareArtifactDto> Artifacts { get; init; }
 }

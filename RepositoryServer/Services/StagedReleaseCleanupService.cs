@@ -91,10 +91,13 @@ public sealed class StagedReleaseCleanupService : BackgroundService
         {
             try
             {
+                var boardNames = await db.GetBoardNamesAsync(release.StagedArtifacts.Select(a => a.BoardId), ct);
                 foreach (var artifact in release.StagedArtifacts)
                 {
-                    var cdnFileName = FirmwareArtifactFileNames.GetFileName(artifact.ArtifactType);
-                    var cdnPath = $"{release.Version}/{artifact.BoardId}/{cdnFileName}";
+                    if (!boardNames.TryGetValue(artifact.BoardId, out var boardName))
+                        continue;
+
+                    var cdnPath = FirmwareArtifactFileNames.BuildStoragePath(release.Version, boardName, artifact.ArtifactType);
                     await _storage.DeleteFileAsync(cdnPath, ct);
                 }
 

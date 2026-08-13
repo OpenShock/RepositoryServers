@@ -56,17 +56,26 @@ public sealed class LatestController : OpenShockControllerBase
         return Ok(FirmwareResponseMapper.ToReleaseDto(latest, boards, cdnBase));
     }
 
-    [HttpGet("{channel}/{boardId:guid}")]
+    /// <param name="board">Board name (e.g. <c>"Wemos-D1-Mini-ESP32"</c>) or board id.</param>
+    [HttpGet("{channel}/{board}")]
     [CacheControl(300)]
     public async Task<IActionResult> GetLatestForBoard(
         [FromRoute] string channel,
-        [FromRoute] Guid boardId,
+        [FromRoute] string board,
         [FromQuery] string? version,
         CancellationToken ct)
     {
         if (!Enum.TryParse<ReleaseChannel>(channel, true, out var firmwareChannel))
         {
             return Problem(FirmwareError.FirmwareInvalidChannel);
+        }
+
+        // Resolved before the up-to-date check so an unknown board always reports 404 rather than
+        // being masked as "no update needed".
+        var resolved = await _db.ResolveBoardAsync(board, ct);
+        if (resolved is not { } boardRef)
+        {
+            return Problem(FirmwareError.FirmwareBoardNotFound);
         }
 
         var latestVersion = await _db.FirmwareVersions
@@ -89,7 +98,7 @@ public sealed class LatestController : OpenShockControllerBase
         }
 
         var artifacts = await _db.FirmwareArtifacts
-            .Where(a => a.Version == latestVersion && a.BoardId == boardId)
+            .Where(a => a.Version == latestVersion && a.BoardId == boardRef.Id)
             .ToListAsync(ct);
 
         if (artifacts.Count == 0)
@@ -101,9 +110,9 @@ public sealed class LatestController : OpenShockControllerBase
         return Ok(new FirmwareBoardReleaseResponseDto
         {
             Version = latestVersion,
-            BoardId = boardId,
+            BoardId = boardRef.Name,
             Artifacts = artifacts
-                .Select(a => FirmwareResponseMapper.ToArtifactDto(a, latestVersion, cdnBase))
+                .Select(a => FirmwareResponseMapper.ToArtifactDto(a, latestVersion, boardRef.Name, cdnBase))
                 .ToList()
         });
     }

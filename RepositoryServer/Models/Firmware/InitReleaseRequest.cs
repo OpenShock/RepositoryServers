@@ -13,9 +13,13 @@ public sealed class InitReleaseRequest
     [Required]
     public required DateTimeOffset ReleaseDate { get; init; }
 
+    /// <summary>
+    /// Boards this release will publish artifacts for, by name (e.g. <c>"Wemos-D1-Mini-ESP32"</c>) —
+    /// the same identifier CI already knows as the PlatformIO env. Board UUIDs are also accepted.
+    /// </summary>
     [Required]
     [MinLength(1)]
-    public required List<Guid> Boards { get; init; }
+    public required List<string> Boards { get; init; }
 
     /// <summary>
     /// Markdown changelog per firmware-api-spec.md §5.3. The server parses this into

@@ -11,5 +11,6 @@ public sealed record FirmwareReleaseDto
     public required DateTimeOffset ReleaseDate { get; init; }
     public required FirmwareSourceDto Source { get; init; }
     public required List<FirmwareReleaseNoteDto> ReleaseNotes { get; init; }
-    public required Dictionary<Guid, FirmwareBoardDetailDto> Boards { get; init; }
+    /// <summary>Keyed by canonical board name — e.g. <c>"Wemos-D1-Mini-ESP32"</c>.</summary>
+    public required Dictionary<string, FirmwareBoardDetailDto> Boards { get; init; }
 }

@@ -34,8 +34,8 @@ RepositoryServer/                    # Main web API project
       CiCdController.cs              # PUT /v1/cicd/modules/{id}/versions/{v} — desktop zip upload
     V2/Firmware/                     # Firmware V2 endpoints
       ManifestController.cs          # GET /v2/firmware/manifest (bootstrap payload)
-      LatestController.cs            # GET /v2/firmware/latest/{channel}[/{boardId}?version=]
-      VersionsController.cs          # GET /v2/firmware/versions[/{version}[/{boardId}]]
+      LatestController.cs            # GET /v2/firmware/latest/{channel}[/{board}?version=]
+      VersionsController.cs          # GET /v2/firmware/versions[/{version}[/{board}]]
       BoardsController.cs            # GET /v2/firmware/boards
       ChipsController.cs             # GET /v2/firmware/chips
       ReleasesController.cs          # POST/PUT/DELETE /v2/firmware/releases/... (CI/CD ingestion)
@@ -122,7 +122,9 @@ docker/
   `firmware_board_usb_devices`
 - Firmware enums: `release_channel`, `firmware_artifact_type`, `firmware_release_note_type`,
   `firmware_chip_architecture`, `release_status`, `repository_provider`
-- URL convention for firmware artifacts: `{CdnBaseUrl}/{version}/{boardId}/{artifactType}.bin`
+- URL convention for firmware artifacts: `{CdnBaseUrl}/{version}/{boardName}/{artifactType}.bin`
+  (board **name**, not id — see `Utils/FirmwareBoardLookup`, the single resolution chokepoint for
+  public board references, and firmware-api-spec.md §4.2)
 - Source-traceability URLs (commit / ref / run) are built server-side per provider
   (`Utils/SourceUrlBuilder`) and never stored
 

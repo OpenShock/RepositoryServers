@@ -106,11 +106,12 @@ public sealed class VersionsController : OpenShockControllerBase
         return Ok(FirmwareResponseMapper.ToReleaseDto(version, boards, cdnBase));
     }
 
-    [HttpGet("{firmwareVersion}/{boardId:guid}")]
+    /// <param name="board">Board name (e.g. <c>"Wemos-D1-Mini-ESP32"</c>) or board id.</param>
+    [HttpGet("{firmwareVersion}/{board}")]
     [CacheControl(86400, immutable: true)]
     public async Task<IActionResult> GetVersionForBoard(
         [FromRoute] string firmwareVersion,
-        [FromRoute] Guid boardId,
+        [FromRoute] string board,
         CancellationToken ct)
     {
         var exists = await _db.FirmwareVersions.AnyAsync(v => v.Version == firmwareVersion, ct);
@@ -119,8 +120,14 @@ public sealed class VersionsController : OpenShockControllerBase
             return Problem(FirmwareError.FirmwareVersionNotFound);
         }
 
+        var resolved = await _db.ResolveBoardAsync(board, ct);
+        if (resolved is not { } boardRef)
+        {
+            return Problem(FirmwareError.FirmwareBoardNotFound);
+        }
+
         var artifacts = await _db.FirmwareArtifacts
-            .Where(a => a.Version == firmwareVersion && a.BoardId == boardId)
+            .Where(a => a.Version == firmwareVersion && a.BoardId == boardRef.Id)
             .ToListAsync(ct);
 
         if (artifacts.Count == 0)
@@ -132,9 +139,9 @@ public sealed class VersionsController : OpenShockControllerBase
         return Ok(new FirmwareBoardReleaseResponseDto
         {
             Version = firmwareVersion,
-            BoardId = boardId,
+            BoardId = boardRef.Name,
             Artifacts = artifacts
-                .Select(a => FirmwareResponseMapper.ToArtifactDto(a, firmwareVersion, cdnBase))
+                .Select(a => FirmwareResponseMapper.ToArtifactDto(a, firmwareVersion, boardRef.Name, cdnBase))
                 .ToList()
         });
     }

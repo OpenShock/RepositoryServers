@@ -10,6 +10,8 @@ namespace OpenShock.RepositoryServer.Tests.Integration.Tests;
 [NotInParallel("repo-server-integration")]
 public class VersionsControllerTests
 {
+    private const string BoardName = "Sample-Board";
+
     [ClassDataSource<WebApplicationFactory>(Shared = SharedType.PerTestSession)]
     public required WebApplicationFactory Factory { get; init; }
 
@@ -119,7 +121,7 @@ public class VersionsControllerTests
 
         var boards = body.GetProperty("boards").EnumerateObject()
             .Select(p => p.Name).ToList();
-        await Assert.That(boards).Contains(boardId.ToString());
+        await Assert.That(boards).Contains(BoardName);
     }
 
     [Test]
@@ -154,8 +156,33 @@ public class VersionsControllerTests
             $"/v2/firmware/versions/1.5.1/{boardId}");
 
         await Assert.That(body.GetProperty("version").GetString()).IsEqualTo("1.5.1");
-        await Assert.That(body.GetProperty("boardId").GetGuid()).IsEqualTo(boardId);
+        await Assert.That(body.GetProperty("boardId").GetString()).IsEqualTo(BoardName);
         await Assert.That(body.GetProperty("artifacts").GetArrayLength()).IsGreaterThanOrEqualTo(1);
+    }
+
+    [Test]
+    public async Task GetVersionForBoard_ByName_ReturnsArtifactsWithNamedUrls()
+    {
+        await SeedVersionWithNotesAsync("1.5.1");
+
+        using var client = Factory.CreateClient();
+        var body = await client.GetFromJsonAsync<JsonElement>(
+            $"/v2/firmware/versions/1.5.1/{BoardName}");
+
+        await Assert.That(body.GetProperty("boardId").GetString()).IsEqualTo(BoardName);
+
+        var url = body.GetProperty("artifacts")[0].GetProperty("url").GetString();
+        await Assert.That(url).Contains($"/1.5.1/{BoardName}/");
+    }
+
+    [Test]
+    public async Task GetVersionForBoard_UnknownName_Returns404()
+    {
+        await SeedVersionWithNotesAsync("1.5.1");
+
+        using var client = Factory.CreateClient();
+        var response = await client.GetAsync("/v2/firmware/versions/1.5.1/No-Such-Board");
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.NotFound);
     }
 
     private async Task SeedVersionsAsync(params (string Version, ReleaseChannel Channel, DateTimeOffset ReleaseDate)[] rows)
@@ -196,7 +223,7 @@ public class VersionsControllerTests
         var board = new FirmwareBoard
         {
             Id = Guid.NewGuid(),
-            Name = "Sample-Board",
+            Name = BoardName,
             ChipId = chip.Id,
             RequiredArtifactTypes = [FirmwareArtifactType.Merged]
         };

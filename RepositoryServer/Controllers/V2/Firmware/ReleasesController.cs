@@ -87,11 +87,10 @@ public class ReleasesController : OpenShockControllerBase
             return Problem(FirmwareError.FirmwareReleaseAlreadyStaging);
         }
 
-        var boardIds = request.Boards.ToHashSet();
-        var existingBoardCount = await _db.FirmwareBoards.CountAsync(b => boardIds.Contains(b.Id), ct);
-        if (existingBoardCount != boardIds.Count)
+        var (declaredBoards, unknownBoards) = await _db.ResolveBoardsAsync(request.Boards, ct);
+        if (unknownBoards.Count > 0)
         {
-            return Problem(FirmwareError.FirmwareBoardNotFound);
+            return Problem(FirmwareError.FirmwareBoardsNotFound(unknownBoards));
         }
 
         // Source traceability — from OIDC claims (attached by GitHubOidcAuthentication).
@@ -131,7 +130,7 @@ public class ReleasesController : OpenShockControllerBase
             RunId = sourceClaims.RunId,
             ReleaseDate = request.ReleaseDate,
             Status = status,
-            DeclaredBoards = request.Boards.ToArray(),
+            DeclaredBoards = declaredBoards.Select(b => b.Id).ToArray(),
             CreatedAt = _timeProvider.GetUtcNow(),
         };
 
@@ -166,12 +165,13 @@ public class ReleasesController : OpenShockControllerBase
 
     // ---- Upload Board Artifacts ----
 
-    [HttpPut("{releaseId:guid}/boards/{boardId:guid}")]
+    /// <param name="board">Board name (e.g. <c>"Wemos-D1-Mini-ESP32"</c>) or board UUID.</param>
+    [HttpPut("{releaseId:guid}/boards/{board}")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(64 * 1024 * 1024)]
     public async Task<IActionResult> UploadBoardArtifacts(
         [FromRoute] Guid releaseId,
-        [FromRoute] Guid boardId,
+        [FromRoute] string board,
         CancellationToken ct)
     {
         var release = await _db.FirmwareReleases.FirstOrDefaultAsync(r => r.Id == releaseId, ct);
@@ -185,16 +185,19 @@ public class ReleasesController : OpenShockControllerBase
             return Problem(FirmwareError.FirmwareReleaseNotEditable);
         }
 
-        if (!release.DeclaredBoards.Contains(boardId))
+        var resolved = await _db.ResolveBoardAsync(board, ct);
+        if (resolved is not { } boardRef)
+        {
+            return Problem(FirmwareError.FirmwareBoardNotFound);
+        }
+
+        if (!release.DeclaredBoards.Contains(boardRef.Id))
         {
             return Problem(FirmwareError.FirmwareBoardNotDeclared);
         }
 
-        var board = await _db.FirmwareBoards.FirstOrDefaultAsync(b => b.Id == boardId, ct);
-        if (board is null)
-        {
-            return Problem(FirmwareError.FirmwareBoardNotFound);
-        }
+        var boardId = boardRef.Id;
+        var boardEntity = await _db.FirmwareBoards.FirstAsync(b => b.Id == boardId, ct);
 
         var files = Request.Form.Files;
         if (files.Count == 0)
@@ -257,15 +260,15 @@ public class ReleasesController : OpenShockControllerBase
         }
 
         // Validate required artifact types per board config.
-        if (board.RequiredArtifactTypes.Length > 0)
+        if (boardEntity.RequiredArtifactTypes.Length > 0)
         {
-            var missingRequired = board.RequiredArtifactTypes
+            var missingRequired = boardEntity.RequiredArtifactTypes
                 .Where(r => !uploadedByType.ContainsKey(r))
                 .Select(r => r.ToString().ToLowerInvariant())
                 .ToList();
             if (missingRequired.Count > 0)
             {
-                return Problem(FirmwareError.FirmwareMissingRequiredArtifacts(boardId, missingRequired));
+                return Problem(FirmwareError.FirmwareMissingRequiredArtifacts(boardRef.Name, missingRequired));
             }
         }
 
@@ -292,8 +295,7 @@ public class ReleasesController : OpenShockControllerBase
                 continue;
             }
 
-            var cdnFileName = FirmwareArtifactFileNames.GetFileName(artifactType);
-            var cdnPath = $"{release.Version}/{boardId}/{cdnFileName}";
+            var cdnPath = FirmwareArtifactFileNames.BuildStoragePath(release.Version, boardRef.Name, artifactType);
 
             await using var uploadStream = new MemoryStream(bytes);
             await _storage.UploadFileAsync(cdnPath, uploadStream, ct);
@@ -310,7 +312,7 @@ public class ReleasesController : OpenShockControllerBase
             uploadedArtifacts.Add(new FirmwareArtifactDto
             {
                 Type = artifactType.ToString().ToLowerInvariant(),
-                Url = $"{cdnBase}/{release.Version}/{boardId}/{cdnFileName}",
+                Url = FirmwareArtifactFileNames.BuildUrl(cdnBase, release.Version, boardRef.Name, artifactType),
                 Sha256Hash = actual,
                 FileSize = bytes.Length,
             });
@@ -350,16 +352,19 @@ public class ReleasesController : OpenShockControllerBase
             return Problem(FirmwareError.FirmwareReleaseNotStaging);
         }
 
+        var boards = await _db.FirmwareBoards
+            .Where(b => release.DeclaredBoards.Contains(b.Id))
+            .ToDictionaryAsync(b => b.Id, ct);
+
         var uploadedBoardIds = release.StagedArtifacts.Select(a => a.BoardId).Distinct().ToHashSet();
-        var missingBoards = release.DeclaredBoards.Where(b => !uploadedBoardIds.Contains(b)).ToList();
+        var missingBoards = release.DeclaredBoards
+            .Where(b => !uploadedBoardIds.Contains(b))
+            .Select(b => boards.TryGetValue(b, out var board) ? board.Name : b.ToString())
+            .ToList();
         if (missingBoards.Count > 0)
         {
             return Problem(FirmwareError.FirmwareReleaseIncomplete(missingBoards));
         }
-
-        var boards = await _db.FirmwareBoards
-            .Where(b => release.DeclaredBoards.Contains(b.Id))
-            .ToDictionaryAsync(b => b.Id, ct);
 
         foreach (var boardId in release.DeclaredBoards)
         {
@@ -376,7 +381,7 @@ public class ReleasesController : OpenShockControllerBase
                 .ToList();
             if (missingTypes.Count > 0)
             {
-                return Problem(FirmwareError.FirmwareMissingRequiredArtifacts(boardId, missingTypes));
+                return Problem(FirmwareError.FirmwareMissingRequiredArtifacts(board.Name, missingTypes));
             }
         }
 
@@ -457,10 +462,13 @@ public class ReleasesController : OpenShockControllerBase
             return Problem(FirmwareError.FirmwareReleaseNotEditable);
         }
 
+        var boardNames = await _db.GetBoardNamesAsync(release.StagedArtifacts.Select(a => a.BoardId), ct);
         foreach (var artifact in release.StagedArtifacts)
         {
-            var cdnFileName = FirmwareArtifactFileNames.GetFileName(artifact.ArtifactType);
-            var cdnPath = $"{release.Version}/{artifact.BoardId}/{cdnFileName}";
+            if (!boardNames.TryGetValue(artifact.BoardId, out var boardName))
+                continue;
+
+            var cdnPath = FirmwareArtifactFileNames.BuildStoragePath(release.Version, boardName, artifact.ArtifactType);
             await _storage.DeleteFileAsync(cdnPath, ct);
         }
 
