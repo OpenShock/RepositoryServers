@@ -188,7 +188,7 @@ public sealed class WebApplicationFactory
 
             ["CiCd:Audience"] = "openshock-repository-server-test",
 
-            ["Repo:CdnBaseUrl"] = "https://cdn-test.openshock.example/repo",
+            ["Modules:CdnBaseUrl"] = "https://cdn-test.openshock.example/repo",
 
             ["Firmware:CdnBaseUrl"] = "https://cdn-test.openshock.example/firmware",
             ["Firmware:Storage:Type"] = "Local",
