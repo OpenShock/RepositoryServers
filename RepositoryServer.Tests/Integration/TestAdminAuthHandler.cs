@@ -19,7 +19,8 @@ namespace OpenShock.RepositoryServer.Tests.Integration;
 /// of users outside the team, and the claim trimming all live in
 /// <c>GitHubAuthentication.OnCreatingTicket</c>.
 /// </remarks>
-public sealed class TestAdminAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>
+public sealed class TestAdminAuthHandler : AuthenticationHandler<AuthenticationSchemeOptions>,
+    IAuthenticationSignOutHandler
 {
     /// <summary>Team slug the test host is configured to treat as admin.</summary>
     public const string AdminTeam = "repo-server-admins";
@@ -65,5 +66,25 @@ public sealed class TestAdminAuthHandler : AuthenticationHandler<AuthenticationS
         var principal = new ClaimsPrincipal(identity);
 
         return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(principal, Scheme.Name)));
+    }
+
+    /// <summary>
+    /// Stands in for the cookie handler's sign-out, which is a hard requirement rather than a
+    /// convenience: <c>SignOut</c> against a scheme whose handler does not support it throws, so
+    /// without this the logout endpoint faults under test.
+    /// </summary>
+    /// <remarks>
+    /// There is no cookie to delete — a session here is a request header. What has to be reproduced
+    /// is the redirect the cookie handler performs on the way out, since that is the half of signing
+    /// out the app depends on.
+    /// </remarks>
+    public Task SignOutAsync(AuthenticationProperties? properties)
+    {
+        if (!string.IsNullOrEmpty(properties?.RedirectUri))
+        {
+            Response.Redirect(properties.RedirectUri);
+        }
+
+        return Task.CompletedTask;
     }
 }

@@ -170,22 +170,24 @@ public class AdminAuthorizationTests
     }
 
     /// <summary>
-    /// The root is where signing out sends the browser, so it has to be routed and anonymous.
+    /// Signing out has to land somewhere that renders without a session.
     /// </summary>
     /// <remarks>
-    /// Asserts on the shell for the same reason as the admin page above: prerendering is off, so an
-    /// anonymous visitor receives the document and the page text arrives over the circuit. What is
-    /// pinned down is that the route exists and the request was not turned away — it used to 404,
-    /// which made every sign-out end on the not-found page.
+    /// Follows the redirect rather than requesting the page directly, so what is pinned down is the
+    /// whole exit: that logout sends the browser somewhere routed, and that the destination serves an
+    /// anonymous visitor. It used to redirect to the unrouted root, which ended on the not-found
+    /// page. Asserts on the shell for the same reason as the admin page above — prerendering is off,
+    /// so the page text arrives over the circuit rather than in this response.
     /// </remarks>
     [Test]
-    public async Task Landing_WithoutSession_IsServed()
+    public async Task Logout_LandsOnAPageThatRendersWithoutASession()
     {
         using var client = Factory.CreateClient();
 
-        var response = await client.GetAsync("/");
+        var response = await client.GetAsync("/auth/logout");
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+        await Assert.That(response.RequestMessage!.RequestUri!.AbsolutePath).IsEqualTo("/auth/signed-out");
 
         var body = await response.Content.ReadAsStringAsync();
         await Assert.That(body).Contains("blazor.web.js");

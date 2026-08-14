@@ -76,13 +76,16 @@ public sealed class AuthController : OpenShockControllerBase
     [AllowAnonymous]
     public IActionResult Logout()
     {
+        // Not "/": the root is not routed, so signing out used to end on the 404 page.
+        const string signedOut = "/auth/signed-out";
+
         if (_authMode.DevBypass)
         {
-            return LocalRedirect("/");
+            return LocalRedirect(signedOut);
         }
 
         return SignOut(
-            new AuthenticationProperties { RedirectUri = "/" },
+            new AuthenticationProperties { RedirectUri = signedOut },
             AuthSchemas.AdminCookie);
     }
 
