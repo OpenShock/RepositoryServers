@@ -35,8 +35,8 @@ builder.Configuration
     .AddJsonFile("appsettings.Container.json", optional: true, reloadOnChange: false)
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: false)
     .AddJsonFile("appsettings.Custom.json", optional: true, reloadOnChange: false)
-    .AddEnvironmentVariables()
     .AddUserSecrets<Program>(true)
+    .AddEnvironmentVariables()
     .AddCommandLine(args);
 
 var isDevelopment = builder.Environment.IsDevelopment();
