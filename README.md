@@ -160,6 +160,7 @@ It is grouped as shared, firmware and desktop:
 
 | Page | Group |
 |------|-------|
+| `/` | Landing page, anonymous. Where signing out lands, and the way in to the login |
 | `/admin` | Status across both domains |
 | `/admin/repositories` | Publish allowlist, shared by firmware and desktop |
 | `/admin/discord-webhooks` | Notification targets, shared |

@@ -98,7 +98,15 @@ if (devAdminBypass)
 
 builder.Services.AddSingleton(new AdminAuthMode(devAdminBypass));
 
-var authenticationBuilder = builder.Services.AddAuthentication();
+// Only the default scheme is authenticated by UseAuthentication, and with three registered there was
+// no default at all, so HttpContext.User was anonymous on any route without an authorization policy.
+// The landing page needs it: it is anonymous by necessity and still has to tell a live session from
+// none. Authenticate only — challenge and sign-out stay explicit at their call sites, and the gated
+// endpoints are untouched because their policies name the schemes they accept.
+var authenticationBuilder = builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = AuthSchemas.AdminCookie;
+});
 
 if (devAdminBypass)
 {

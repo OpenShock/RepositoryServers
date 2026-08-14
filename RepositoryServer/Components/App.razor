@@ -1,6 +1,8 @@
 @*
     Root document for the admin UI. Pages render interactively over a server circuit and carry the
     admin policy, so an anonymous request is turned away at the endpoint before any of this renders.
+    The exception is the landing page, which has to render without a session because signing out
+    redirects to it.
 *@
 <!DOCTYPE html>
 @*

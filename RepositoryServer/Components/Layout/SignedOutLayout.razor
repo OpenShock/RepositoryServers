@@ -1,0 +1,13 @@
+@*
+    Layout for the routes that render without a session.
+
+    AdminLayout is not usable for those: its sidebar is the administration navigation, and putting it
+    in front of someone who has just signed out both misstates what they can reach and makes every
+    link a challenge away from signing them back in. This is the centered column of style guide §2.6
+    without the card, since these pages carry an empty state rather than a form.
+*@
+@inherits LayoutComponentBase
+
+<div class="flex h-screen flex-col items-center justify-center px-4">
+    @Body
+</div>

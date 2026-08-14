@@ -1,0 +1,56 @@
+@*
+    The root route, and where signing out lands.
+
+    Anonymous on purpose: /auth/logout drops the cookie and then redirects here, so this has to
+    render without a session. Before it existed the root was unrouted and every sign-out ended on the
+    404 page.
+*@
+@page "/"
+@layout SignedOutLayout
+@inject AdminAuthMode AuthMode
+
+@* Empty-state anatomy, style guide §4.2: medallion, heading, helper line, action. *@
+<div class="flex w-full flex-col items-center justify-center gap-6 py-12 text-center sm:gap-8">
+    <div class="flex flex-col items-center gap-3">
+        <div class="bg-muted text-muted-foreground flex size-16 items-center justify-center rounded-2xl sm:size-20">
+            <Glyph Name="IconName.LogIn" Class="size-8 sm:size-10"/>
+        </div>
+        <h3 class="text-xl font-medium sm:text-2xl">Repository Server</h3>
+
+        <AuthorizeView>
+            <Authorized>
+                <p class="text-muted-foreground text-base sm:text-lg">
+                    Signed in as <span class="font-medium">@context.User.Identity?.Name</span>.
+                </p>
+            </Authorized>
+            <NotAuthorized>
+                <p class="text-muted-foreground text-base sm:text-lg">
+                    Administration requires a GitHub sign-in.
+                </p>
+            </NotAuthorized>
+        </AuthorizeView>
+
+        @*
+            Says so plainly rather than letting the page claim a session: with the bypass on there is
+            nothing to sign out of, so arriving here from the sign-out button and being told you are
+            still signed in would otherwise read as a failed logout.
+        *@
+        @if (AuthMode.DevBypass)
+        {
+            <p class="text-muted-foreground text-base sm:text-lg">
+                Authentication is disabled on this server, so there is no session to end.
+            </p>
+        }
+    </div>
+
+    <div>
+        <AuthorizeView>
+            <Authorized>
+                <BbButton Href="/admin">Administration</BbButton>
+            </Authorized>
+            <NotAuthorized>
+                <BbButton Href="/auth/login">Sign in with GitHub</BbButton>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
+</div>

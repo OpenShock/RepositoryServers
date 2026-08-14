@@ -42,12 +42,24 @@ public static class GitHubAuthentication
         options.ExpireTimeSpan = config.SessionLifetime;
         options.SlidingExpiration = false;
 
+        // Left at their defaults these point at /Account/Login and /Account/AccessDenied, which is
+        // ASP.NET Identity's scaffolding and does not exist here: an anonymous visit to /admin ends
+        // on the 404 page instead of the login. The parameter name matches AuthController.Login's
+        // argument so the round trip back to the requested page needs no rebinding.
+        options.LoginPath = "/auth/login";
+        options.ReturnUrlParameter = "returnUrl";
+
         // API callers get a status code, browsers get sent to the login. Deciding on path rather than
         // sniffing Accept headers keeps the behaviour identical for curl, fetch and the admin UI.
         options.Events = new CookieAuthenticationEvents
         {
             OnRedirectToLogin = context => WriteProblemOrRedirect(context, AuthResultError.SessionRequired),
-            OnRedirectToAccessDenied = context => WriteProblemOrRedirect(context, AuthResultError.NotAnAdmin)
+
+            // No redirect target for this one: a session only exists once team membership was
+            // verified at the callback, so a denied session is a state change, not a wrong turn a
+            // login page could fix. Answering with the problem beats bouncing to a page that would
+            // challenge and sign the same rejected user straight back in.
+            OnRedirectToAccessDenied = context => WriteProblemAsync(context.HttpContext, AuthResultError.NotAnAdmin)
         };
     }
 

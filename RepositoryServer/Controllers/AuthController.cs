@@ -48,15 +48,19 @@ public sealed class AuthController : OpenShockControllerBase
             return Problem(AuthResultError.InvalidReturnUrl);
         }
 
+        // The admin dashboard rather than "/": the root is not routed, so a login started without a
+        // return url used to succeed and then land on the 404 page.
+        var destination = returnUrl ?? "/admin";
+
         // Under the development bypass there is no identity provider and no OAuth scheme registered,
         // so there is nothing to challenge. The caller is already an admin.
         if (_authMode.DevBypass)
         {
-            return LocalRedirect(returnUrl ?? "/");
+            return LocalRedirect(destination);
         }
 
         return Challenge(
-            new AuthenticationProperties { RedirectUri = returnUrl ?? "/" },
+            new AuthenticationProperties { RedirectUri = destination },
             AuthSchemas.AdminOAuth);
     }
 

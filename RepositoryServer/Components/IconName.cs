@@ -16,5 +16,6 @@ public enum IconName
     Board,
     Chip,
     Warning,
-    Puzzle
+    Puzzle,
+    LogIn
 }

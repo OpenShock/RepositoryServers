@@ -188,6 +188,9 @@ public sealed class WebApplicationFactory
 
             ["CiCd:Audience"] = "openshock-repository-server-test",
 
+            ["Modules:Id"] = "openshock-desktop-modules-test",
+            ["Modules:Name"] = "OpenShock Modules (test)",
+            ["Modules:Author"] = "OpenShockTests",
             ["Modules:CdnBaseUrl"] = "https://cdn-test.openshock.example/repo",
 
             ["Firmware:CdnBaseUrl"] = "https://cdn-test.openshock.example/firmware",

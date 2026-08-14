@@ -1,6 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc.Testing;
+using OpenShock.RepositoryServer.AuthenticationHandlers;
+using OpenShock.RepositoryServer.Config;
 
 namespace OpenShock.RepositoryServer.Tests.Integration.Tests;
 
@@ -129,6 +132,63 @@ public class AdminAuthorizationTests
         var response = await client.GetAsync($"/auth/login?returnUrl={Uri.EscapeDataString(returnUrl)}");
 
         await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+    }
+
+    /// <summary>
+    /// The challenge the cookie handler issues has to land somewhere that exists.
+    /// </summary>
+    /// <remarks>
+    /// Left at their framework defaults, <c>LoginPath</c> and <c>ReturnUrlParameter</c> point at
+    /// ASP.NET Identity's scaffolding, which this app does not have: browsing to an admin page
+    /// redirected to <c>/Account/Login</c> and ended on the 404 page. Driving the request off the
+    /// configured options rather than a literal is the point — a login path that stops matching the
+    /// controller fails here. The non-local return url makes one assertion cover both halves: only
+    /// the login action answers it with a 400, so a wrong path or a query parameter the action does
+    /// not bind shows up as a redirect instead.
+    /// </remarks>
+    [Test]
+    public async Task CookieChallenge_TargetsTheLoginEndpoint()
+    {
+        var options = new CookieAuthenticationOptions();
+        GitHubAuthentication.ConfigureCookie(options, new GitHubAuthConfig
+        {
+            ClientId = "repository-server-tests",
+            ClientSecret = "test-client-secret",
+            Organization = "OpenShockTests",
+            Team = TestAdminAuthHandler.AdminTeam
+        });
+
+        using var client = Factory.CreateClient(new WebApplicationFactoryClientOptions
+        {
+            AllowAutoRedirect = false
+        });
+
+        var response = await client.GetAsync(
+            $"{options.LoginPath}?{options.ReturnUrlParameter}={Uri.EscapeDataString("https://evil.example")}");
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.BadRequest);
+    }
+
+    /// <summary>
+    /// The root is where signing out sends the browser, so it has to be routed and anonymous.
+    /// </summary>
+    /// <remarks>
+    /// Asserts on the shell for the same reason as the admin page above: prerendering is off, so an
+    /// anonymous visitor receives the document and the page text arrives over the circuit. What is
+    /// pinned down is that the route exists and the request was not turned away — it used to 404,
+    /// which made every sign-out end on the not-found page.
+    /// </remarks>
+    [Test]
+    public async Task Landing_WithoutSession_IsServed()
+    {
+        using var client = Factory.CreateClient();
+
+        var response = await client.GetAsync("/");
+
+        await Assert.That(response.StatusCode).IsEqualTo(HttpStatusCode.OK);
+
+        var body = await response.Content.ReadAsStringAsync();
+        await Assert.That(body).Contains("blazor.web.js");
     }
 
     private sealed record MeResponse(string? Subject, string? Username, string? Team);
