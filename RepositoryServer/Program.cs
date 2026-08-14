@@ -130,15 +130,8 @@ else
         {
             GitHubAuthentication.ConfigureOAuth(options, github);
         });
-
-    // Session cookies are encrypted with data protection keys. Left at the default they live in the
-    // container filesystem, so every replica mints cookies the others reject and a rollout logs
-    // everyone out. Persisting them to a shared volume is what makes more than one replica viable.
-    if (!string.IsNullOrWhiteSpace(github.DataProtectionKeyPath))
-    {
-        builder.Services.AddDataProtection()
-            .PersistKeysToDbContext<RepoServerContext>();
-    }
+    
+        builder.Services.AddDataProtection().PersistKeysToDbContext<RepoServerContext>();
 }
 
 authenticationBuilder.AddJwtBearer(AuthSchemas.CiCdToken, options =>

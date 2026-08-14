@@ -47,11 +47,4 @@ public sealed class GitHubAuthConfig
 
     /// <summary>How long an admin session lasts before a fresh login is required.</summary>
     public TimeSpan SessionLifetime { get; init; } = TimeSpan.FromHours(8);
-
-    /// <summary>
-    /// Directory to persist data protection keys to. Session cookies are encrypted with these, so
-    /// without a shared path every replica issues cookies the others cannot read, and each restart
-    /// invalidates every session. Leave null for single-instance deployments.
-    /// </summary>
-    public string? DataProtectionKeyPath { get; init; }
 }
