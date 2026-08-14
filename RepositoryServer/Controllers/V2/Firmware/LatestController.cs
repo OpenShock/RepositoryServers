@@ -2,10 +2,11 @@ using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OpenShock.Internal.Common;
+using OpenShock.Internal.Common.Problems;
 using OpenShock.RepositoryServer.Config;
 using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.Models.Firmware;
-using OpenShock.RepositoryServer.Problems;
+using OpenShock.RepositoryServer.Errors;
 using OpenShock.RepositoryServer.RepoServerDb;
 using OpenShock.RepositoryServer.Utils;
 using System.Net.Mime;
@@ -27,8 +28,19 @@ public sealed class LatestController : OpenShockControllerBase
         _apiConfig = apiConfig;
     }
 
+    /// <summary>
+    /// Gets the latest firmware release visible to a channel.
+    /// </summary>
+    /// <param name="channel">Release channel, e.g. <c>stable</c> or <c>beta</c>.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <response code="200">The latest release for the channel.</response>
+    /// <response code="400">The channel is not a known release channel.</response>
+    /// <response code="404">No version has been published to this channel.</response>
     [HttpGet("{channel}")]
     [CacheControl(300)]
+    [ProducesResponseType<FirmwareReleaseDto>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)] // FirmwareInvalidChannel
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status404NotFound, MediaTypeNames.Application.ProblemJson)] // FirmwareVersionNotFound
     public async Task<IActionResult> GetLatest([FromRoute] string channel, CancellationToken ct)
     {
         if (!Enum.TryParse<ReleaseChannel>(channel, true, out var firmwareChannel))
@@ -60,12 +72,23 @@ public sealed class LatestController : OpenShockControllerBase
         return Ok(FirmwareResponseMapper.ToReleaseDto(latest, boards, cdnBase));
     }
 
+    /// <summary>
+    /// Gets the latest firmware release for a single board.
+    /// </summary>
     /// <param name="channel">Release channel, e.g. <c>stable</c> or <c>beta</c>.</param>
     /// <param name="board">Board name (e.g. <c>"Wemos-D1-Mini-ESP32"</c>) or board id.</param>
     /// <param name="version">Version the caller already has. Answers 204 when it is already the latest.</param>
     /// <param name="ct">Cancellation token.</param>
+    /// <response code="200">The latest release for the board.</response>
+    /// <response code="204">The caller is already on the latest version.</response>
+    /// <response code="400">The channel is not a known release channel.</response>
+    /// <response code="404">The board is unknown, has no artifacts, or nothing has been published to the channel.</response>
     [HttpGet("{channel}/{board}")]
     [CacheControl(300)]
+    [ProducesResponseType<FirmwareBoardReleaseResponseDto>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)] // FirmwareInvalidChannel
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status404NotFound, MediaTypeNames.Application.ProblemJson)] // FirmwareBoardNotFound, FirmwareVersionNotFound
     public async Task<IActionResult> GetLatestForBoard(
         [FromRoute] string channel,
         [FromRoute] string board,
@@ -99,7 +122,7 @@ public sealed class LatestController : OpenShockControllerBase
 
         // String equality (not semver) is intentional: rollbacks — if a version is pulled
         // and an older version becomes "latest", the hub's string compare will still differ
-        // and trigger an update. See firmware-api-spec.md §4.2.
+        // and trigger an update.
         if (!string.IsNullOrWhiteSpace(version) && string.Equals(version, latestVersion, StringComparison.Ordinal))
         {
             return NoContent();

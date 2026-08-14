@@ -22,9 +22,10 @@ public sealed class InitReleaseRequest
     public required List<string> Boards { get; init; }
 
     /// <summary>
-    /// Markdown changelog per firmware-api-spec.md §5.3. The server parses this into
-    /// structured <see cref="FirmwareReleaseNoteDto"/> entries. Empty / whitespace-only
-    /// strings reach the parser and yield <c>firmware/invalid-changelog</c>.
+    /// Markdown changelog. The server parses this into structured
+    /// <see cref="FirmwareReleaseNoteDto"/> entries; see <c>ChangelogParser</c> for the accepted
+    /// grammar. Empty / whitespace-only strings reach the parser and yield
+    /// <c>Firmware.InvalidChangelog</c>.
     /// </summary>
     [Required(AllowEmptyStrings = true)]
     public required string Changelog { get; init; }

@@ -17,7 +17,6 @@ public readonly record struct ResolvedBoard(Guid Id, string Name);
 /// This is the single chokepoint through which every public board reference passes, which is what
 /// keeps board aliases an additive change: point alternate names at a canonical board here, and callers
 /// keep receiving the canonical name with no change to storage layout or response shapes.
-/// See firmware-api-spec.md §4.2.
 /// </remarks>
 public static class FirmwareBoardLookup
 {

@@ -2,7 +2,7 @@
 using System.Text.Json.Serialization;
 using Semver;
 
-namespace OpenShock.RepositoryServer.Utils;
+namespace OpenShock.RepositoryServer.JsonSerialization;
 
 public class SemVersionConverter : JsonConverter<SemVersion>
 {

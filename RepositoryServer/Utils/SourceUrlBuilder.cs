@@ -4,9 +4,9 @@ namespace OpenShock.RepositoryServer.Utils;
 
 /// <summary>
 /// Builds human-browsable URLs for source-traceability fields on firmware release
-/// responses. Pure function, provider-switched. Unknown providers return <c>null</c>
-/// so consumers can degrade gracefully per firmware-api-spec.md §10 ("Consumers should
-/// handle unknown providers gracefully"). Today only GitHub is a known provider.
+/// responses. Pure function, provider-switched. Unknown providers return <c>null</c> rather
+/// than a guessed URL, so consumers can degrade gracefully. Today only GitHub is a known
+/// provider.
 /// </summary>
 public static class SourceUrlBuilder
 {

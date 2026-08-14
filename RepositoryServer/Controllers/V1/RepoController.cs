@@ -29,7 +29,12 @@ public sealed class RepoController : OpenShockControllerBase
         _apiConfig = apiConfig;
     }
 
+    /// <summary>
+    /// Gets the desktop module repository index: every module and its published versions.
+    /// </summary>
+    /// <response code="200">The repository index.</response>
     [HttpGet]
+    [ProducesResponseType<Repository>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
     public async Task<IActionResult> GetRepo()
     {
         var moduleRaw = await _db.Modules.Include(x => x.Versions).ToArrayAsync();

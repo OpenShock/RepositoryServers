@@ -1,17 +1,15 @@
 using System.Net;
 using System.Net.Http.Headers;
-using System.Net.Mime;
 using System.Security.Claims;
 using System.Text.Json;
 using AspNet.Security.OAuth.GitHub;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OAuth;
-using Microsoft.Extensions.Options;
 using OpenShock.Internal.Common.Problems;
 using OpenShock.RepositoryServer.Config;
 using OpenShock.RepositoryServer.Errors;
-using JsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions;
+using OpenShock.RepositoryServer.JsonSerialization;
 
 namespace OpenShock.RepositoryServer.AuthenticationHandlers;
 
@@ -205,7 +203,7 @@ public static class GitHubAuthentication
         RedirectContext<TOptions> context, OpenShockProblem problem)
         where TOptions : AuthenticationSchemeOptions
     {
-        if (IsApiPath(context.Request.Path))
+        if (ApiSurface.IsApiPath(context.Request.Path))
         {
             return WriteProblemAsync(context.HttpContext, problem);
         }
@@ -214,25 +212,10 @@ public static class GitHubAuthentication
         return Task.CompletedTask;
     }
 
-    /// <summary>
-    /// Versioned API surface. Everything under these prefixes answers with a status code; anything
-    /// else is assumed to be a browser that can usefully follow a redirect.
-    /// </summary>
-    private static bool IsApiPath(PathString path) =>
-        path.StartsWithSegments("/1") || path.StartsWithSegments("/2");
-
     private static Task WriteProblemAsync(HttpContext httpContext, OpenShockProblem problem)
     {
         if (httpContext.Response.HasStarted) return Task.CompletedTask;
 
-        problem.RequestId = httpContext.TraceIdentifier;
-        httpContext.Response.StatusCode = problem.Status!.Value;
-
-        var serializerOptions = httpContext.RequestServices
-            .GetRequiredService<IOptions<JsonOptions>>()
-            .Value.SerializerOptions;
-
-        return httpContext.Response.WriteAsJsonAsync(problem, serializerOptions,
-            contentType: MediaTypeNames.Application.ProblemJson);
+        return problem.WriteAsJsonAsync(httpContext, JsonOptions.Default, httpContext.RequestAborted);
     }
 }

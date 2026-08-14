@@ -4,8 +4,8 @@ using Microsoft.AspNetCore.Mvc.Filters;
 namespace OpenShock.RepositoryServer.Utils;
 
 /// <summary>
-/// Applies a <c>Cache-Control</c> header per firmware-api-spec.md §8: public max-age on
-/// 2xx responses, <c>no-store</c> on errors. Apply per-action on public read endpoints.
+/// Applies a <c>Cache-Control</c> header: public max-age on 2xx responses, <c>no-store</c> on
+/// errors. Apply per-action on public read endpoints.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
 public sealed class CacheControlAttribute : ActionFilterAttribute

@@ -6,10 +6,11 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using OneOf;
 using OpenShock.Internal.Common;
+using OpenShock.Internal.Common.Problems;
 using OpenShock.RepositoryServer.Config;
 using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.Models.Firmware;
-using OpenShock.RepositoryServer.Problems;
+using OpenShock.RepositoryServer.Errors;
 using OpenShock.RepositoryServer.RepoServerDb;
 using OpenShock.RepositoryServer.Services;
 using OpenShock.RepositoryServer.Utils;
@@ -65,7 +66,21 @@ public class ReleasesController : OpenShockControllerBase
 
     // ---- Init Release ----
 
+    /// <summary>
+    /// Opens a staging release for a version, declaring the boards it will carry.
+    /// </summary>
+    /// <param name="request">Version, channel, declared boards and changelog.</param>
+    /// <param name="nofailQuery">Accept an unparseable changelog and open the release in <c>editing</c> instead of failing.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <response code="201">The release was opened.</response>
+    /// <response code="400">Invalid semver, channel, board list or changelog.</response>
+    /// <response code="404">One or more declared boards are unknown.</response>
+    /// <response code="409">The version is already published, or another release for it is open.</response>
     [HttpPost]
+    [ProducesResponseType<InitReleaseResponse>(StatusCodes.Status201Created, MediaTypeNames.Application.Json)]
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)] // FirmwareInvalidSemver, FirmwareInvalidChannel, FirmwareReleaseBoardsEmpty, FirmwareInvalidChangelog
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status404NotFound, MediaTypeNames.Application.ProblemJson)] // FirmwareBoardsNotFound
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)] // FirmwareVersionAlreadyPublished, FirmwareReleaseAlreadyStaging
     public async Task<IActionResult> InitRelease(
         [FromBody] InitReleaseRequest request,
         [FromQuery(Name = "nofail")] bool? nofailQuery,
@@ -195,12 +210,25 @@ public class ReleasesController : OpenShockControllerBase
 
     // ---- Upload Board Artifacts ----
 
+    /// <summary>
+    /// Uploads one board's artifacts into an open release, verifying them against a SHA-256 manifest.
+    /// </summary>
     /// <param name="releaseId">Release the artifacts belong to.</param>
     /// <param name="board">Board name (e.g. <c>"Wemos-D1-Mini-ESP32"</c>) or board UUID.</param>
     /// <param name="ct">Cancellation token.</param>
+    /// <response code="200">The artifacts that were staged.</response>
+    /// <response code="400">Manifest keys, artifact types or hashes do not match the uploaded files.</response>
+    /// <response code="403">The release belongs to a different repository.</response>
+    /// <response code="404">The release or board does not exist.</response>
+    /// <response code="409">The release is no longer accepting uploads.</response>
     [HttpPut("{releaseId:guid}/boards/{board}")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(64 * 1024 * 1024)]
+    [ProducesResponseType<List<FirmwareArtifactDto>>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)] // FirmwareManifestKeysMismatch, FirmwareInvalidArtifactType, FirmwareMissingRequiredArtifacts, FirmwareSha256Mismatch, FirmwareBoardNotDeclared
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status403Forbidden, MediaTypeNames.Application.ProblemJson)] // FirmwareReleaseNotOwned
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status404NotFound, MediaTypeNames.Application.ProblemJson)] // FirmwareReleaseNotFound, FirmwareBoardNotFound
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)] // FirmwareReleaseNotEditable
     public async Task<IActionResult> UploadBoardArtifacts(
         [FromRoute] Guid releaseId,
         [FromRoute] string board,
@@ -385,7 +413,22 @@ public class ReleasesController : OpenShockControllerBase
 
     // ---- Publish Release ----
 
+    /// <summary>
+    /// Promotes a complete staging release to a published version.
+    /// </summary>
+    /// <param name="releaseId">Release to publish.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <response code="201">The version was published.</response>
+    /// <response code="400">A declared board is missing artifacts the board requires.</response>
+    /// <response code="403">The release belongs to a different repository.</response>
+    /// <response code="404">The release does not exist.</response>
+    /// <response code="409">The release is not in staging, or its notes are not finalized.</response>
     [HttpPost("{releaseId:guid}/publish")]
+    [ProducesResponseType(StatusCodes.Status201Created)]
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)] // FirmwareReleaseIncomplete, FirmwareMissingRequiredArtifacts
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status403Forbidden, MediaTypeNames.Application.ProblemJson)] // FirmwareReleaseNotOwned
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status404NotFound, MediaTypeNames.Application.ProblemJson)] // FirmwareReleaseNotFound
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)] // FirmwareReleaseNotesNotFinalized, FirmwareReleaseNotStaging
     public async Task<IActionResult> PublishRelease([FromRoute] Guid releaseId, CancellationToken ct)
     {
         var release = await _db.FirmwareReleases
@@ -557,7 +600,20 @@ public class ReleasesController : OpenShockControllerBase
 
     // ---- Abort Release ----
 
+    /// <summary>
+    /// Abandons an open release and deletes everything it staged.
+    /// </summary>
+    /// <param name="releaseId">Release to abort.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <response code="204">The release was aborted.</response>
+    /// <response code="403">The release belongs to a different repository.</response>
+    /// <response code="404">The release does not exist.</response>
+    /// <response code="409">The release is no longer open.</response>
     [HttpDelete("{releaseId:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status403Forbidden, MediaTypeNames.Application.ProblemJson)] // FirmwareReleaseNotOwned
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status404NotFound, MediaTypeNames.Application.ProblemJson)] // FirmwareReleaseNotFound
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)] // FirmwareReleaseNotEditable
     public async Task<IActionResult> AbortRelease([FromRoute] Guid releaseId, CancellationToken ct)
     {
         var release = await _db.FirmwareReleases

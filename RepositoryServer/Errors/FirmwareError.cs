@@ -1,7 +1,7 @@
 using System.Net;
 using OpenShock.Internal.Common.Problems;
 
-namespace OpenShock.RepositoryServer.Problems;
+namespace OpenShock.RepositoryServer.Errors;
 
 public static class FirmwareError
 {
@@ -30,13 +30,13 @@ public static class FirmwareError
         new("Firmware.ReleaseIncomplete", $"Not all declared boards have been uploaded. Missing: {string.Join(", ", missingBoards)}");
 
     public static OpenShockProblem FirmwareInvalidChangelog(string reason) =>
-        new("firmware/invalid-changelog", "The supplied changelog markdown is not valid", HttpStatusCode.BadRequest, reason);
+        new("Firmware.InvalidChangelog", "The supplied changelog markdown is not valid", HttpStatusCode.BadRequest, reason);
     public static OpenShockProblem FirmwareSha256Mismatch(string detail) =>
-        new("firmware/sha256-mismatch", "Uploaded artifact hash does not match the provided SHA-256 manifest", HttpStatusCode.BadRequest, detail);
+        new("Firmware.Sha256Mismatch", "Uploaded artifact hash does not match the provided SHA-256 manifest", HttpStatusCode.BadRequest, detail);
     public static OpenShockProblem FirmwareManifestKeysMismatch(string detail) =>
-        new("firmware/manifest-keys-mismatch", "The SHA-256 manifest keys do not match the uploaded files", HttpStatusCode.BadRequest, detail);
+        new("Firmware.ManifestKeysMismatch", "The SHA-256 manifest keys do not match the uploaded files", HttpStatusCode.BadRequest, detail);
     public static OpenShockProblem FirmwareReleaseNotesNotFinalized =>
-        new("firmware/release-notes-not-finalized", "Release notes must be finalized before publish", HttpStatusCode.Conflict);
+        new("Firmware.ReleaseNotesNotFinalized", "Release notes must be finalized before publish", HttpStatusCode.Conflict);
 
     public static OpenShockProblem FirmwareBoardNameConflict =>
         new("Firmware.BoardNameConflict", "A board with this name already exists (names are compared case-insensitively)", HttpStatusCode.Conflict);

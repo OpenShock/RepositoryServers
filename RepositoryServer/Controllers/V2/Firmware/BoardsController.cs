@@ -23,8 +23,16 @@ public sealed class BoardsController : OpenShockControllerBase
         _db = db;
     }
 
+    /// <summary>
+    /// Lists the known boards.
+    /// </summary>
+    /// <param name="chip">Optional chip name filter, matched case-insensitively.</param>
+    /// <param name="includeDiscontinued">Whether to include boards that are no longer produced.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <response code="200">The matching boards, ordered by name.</response>
     [HttpGet]
     [CacheControl(300)]
+    [ProducesResponseType<List<FirmwareBoardDto>>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
     public async Task<IActionResult> ListBoards(
         [FromQuery] string? chip,
         [FromQuery] bool includeDiscontinued = true,

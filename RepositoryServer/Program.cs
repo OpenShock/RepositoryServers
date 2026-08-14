@@ -1,9 +1,9 @@
 ﻿using System.Net;
-using System.Text.Json;
 using Asp.Versioning;
 using EntityFramework.Exceptions.PostgreSQL;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -24,6 +24,7 @@ using OpenTelemetry.Metrics;
 using Scalar.AspNetCore;
 using Serilog;
 using ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders;
+using JsonOptions = OpenShock.RepositoryServer.JsonSerialization.JsonOptions;
 using ValidationProblem = OpenShock.RepositoryServer.Problems.ValidationProblem;
 
 var builder = WebApplication.CreateSlimBuilder(args);
@@ -69,8 +70,7 @@ builder.Services.AddSingleton<Microsoft.AspNetCore.Diagnostics.IExceptionHandler
     new OpenShockExceptionHandler(
         sp.GetRequiredService<IHostEnvironment>(),
         sp.GetRequiredService<ILoggerFactory>(),
-        sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions>>()
-            .Value.SerializerOptions));
+        JsonOptions.Default));
 
 // The admin bypass exists only in Debug builds, only in Development, and only when asked for.
 // Release builds do not contain the handler at all, so the published image cannot be talked into it.
@@ -160,12 +160,11 @@ builder.Services.AddAuthorizationBuilder()
         .RequireClaim(AuthSchemas.CiCdClaims.Scope, RepositoryScope.PublishModules.ToScopeClaim()));
 
 
-builder.Services.ConfigureHttpJsonOptions(options =>
-{
-    options.SerializerOptions.PropertyNameCaseInsensitive = true;
-    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-    options.SerializerOptions.Converters.Add(new SemVersionConverter());
-});
+// Authorization failures on the API surface answer with a problem body naming the unmet
+// requirements, rather than the framework's bare 403.
+builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, OpenShockAuthorizationMiddlewareResultHandler>();
+
+builder.Services.ConfigureHttpJsonOptions(options => JsonOptions.ConfigureDefault(options.SerializerOptions));
 
 // Admin UI. Interactive server rendering: the pages call the admin services and EF Core directly,
 // and there is no admin HTTP API for a client-side runtime to talk to. Pages carry the admin policy
@@ -174,12 +173,7 @@ builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddBlazorBlueprintComponents();
 
-builder.Services.AddControllers().AddJsonOptions(x =>
-{
-    x.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
-    x.JsonSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-    x.JsonSerializerOptions.Converters.Add(new SemVersionConverter());
-});
+builder.Services.AddControllers().AddJsonOptions(x => JsonOptions.ConfigureDefault(x.JsonSerializerOptions));
 
 builder.Services
     .AddApiVersioning(options =>

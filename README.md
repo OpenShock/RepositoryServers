@@ -29,10 +29,9 @@ secrets.
 
 ### API Documentation
 
-The Scalar API reference is served at `/scalar` on any running instance.
-
-`firmware-api-spec.md` in this repository is the canonical contract for the firmware endpoints:
-response shapes, caching rules, error codes and the release workflow. Consumers should conform to it.
+The Scalar API reference is served at `/scalar` on any running instance. It is generated from the
+controllers, one document per API version, and covers response shapes, caching rules and the problem
+details returned on error.
 
 # Configuration
 
@@ -238,8 +237,6 @@ request is verified before anything is written. If the changelog fails to parse,
 the build fails. With `?nofail` the release is created in `editing` status instead and cannot be
 published until a maintainer fixes the notes through the admin endpoint. Releases that outlive their
 TTL are aborted by a background job that runs every five minutes.
-
-See sections 5.2 and 5.3 of `firmware-api-spec.md` for request bodies and the changelog format.
 
 # Deployment / Self Hosting
 

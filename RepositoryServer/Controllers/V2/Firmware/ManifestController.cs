@@ -30,8 +30,14 @@ public sealed class ManifestController : OpenShockControllerBase
         _db = db;
     }
 
+    /// <summary>
+    /// Gets the firmware catalog: latest version per channel, boards, chips, USB identifiers and advisories.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <response code="200">The manifest.</response>
     [HttpGet]
     [CacheControl(300)]
+    [ProducesResponseType<FirmwareManifestResponse>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
     public async Task<IActionResult> GetManifest(CancellationToken ct)
     {
         // DbContext is not thread-safe; queries run sequentially. The manifest is cached

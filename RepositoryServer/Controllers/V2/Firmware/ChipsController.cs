@@ -22,8 +22,14 @@ public sealed class ChipsController : OpenShockControllerBase
         _db = db;
     }
 
+    /// <summary>
+    /// Lists the known chips.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <response code="200">The chips, ordered by name.</response>
     [HttpGet]
     [CacheControl(300)]
+    [ProducesResponseType<List<FirmwareChipDto>>(StatusCodes.Status200OK, MediaTypeNames.Application.Json)]
     public async Task<IActionResult> ListChips(CancellationToken ct)
     {
         var rows = await _db.FirmwareChips

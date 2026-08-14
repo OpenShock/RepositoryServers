@@ -24,7 +24,7 @@ public static class FirmwareArtifactFileNames
     /// would strand every artifact ever published for it, unrecoverably — nothing records the name a
     /// blob was written under. The id never changes, so a rename is a pure metadata edit.
     /// The board name remains the public identifier everywhere it is a label rather than a key:
-    /// routes, response fields, ingestion and errors. See firmware-api-spec.md §4.2.
+    /// routes, response fields, ingestion and errors.
     /// </remarks>
     public static string BuildStoragePath(string version, Guid boardId, FirmwareArtifactType type)
         => $"{version}/{boardId}/{GetFileName(type)}";

@@ -2,8 +2,8 @@ namespace OpenShock.RepositoryServer.Services;
 
 /// <summary>
 /// Fire-and-forget Discord webhook notifications. All methods MUST swallow errors and
-/// never fail the triggering operation (see firmware-api-spec.md §12). Implementations
-/// return <see cref="Task.CompletedTask"/> when no webhooks are configured.
+/// never fail the triggering operation. Implementations return
+/// <see cref="Task.CompletedTask"/> when no webhooks are configured.
 /// </summary>
 public interface IDiscordNotificationService
 {

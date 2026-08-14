@@ -3,8 +3,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using OpenShock.Internal.Common;
+using OpenShock.Internal.Common.Problems;
 using OpenShock.RepositoryServer.Config;
-using OpenShock.RepositoryServer.Problems;
+using OpenShock.RepositoryServer.Errors;
 using OpenShock.RepositoryServer.RepoServerDb;
 using OpenShock.RepositoryServer.Services;
 using Semver;
@@ -41,9 +42,19 @@ public class CiCdController : OpenShockControllerBase
     /// Publishes a desktop module version by uploading a zip file.
     /// The file is hashed server-side, uploaded to storage, and recorded in the database.
     /// </summary>
+    /// <response code="201">The version was published.</response>
+    /// <response code="400">The version is not valid semver, or the uploaded zip is missing or rejected.</response>
+    /// <response code="403">The calling repository does not own this module.</response>
+    /// <response code="404">The module does not exist.</response>
+    /// <response code="409">This version has already been published.</response>
     [HttpPut("modules/{moduleId}/versions/{moduleVersion}")]
     [Consumes("multipart/form-data")]
     [RequestSizeLimit(256 * 1024 * 1024)] // 256 MB
+    [ProducesResponseType(StatusCodes.Status201Created)]
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)] // VersionInvalidSemver, ZipMissing, ZipInvalid, ZipEmpty, ZipPathTraversal, ZipDisallowedDirectory, ZipDisallowedRootFile
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status403Forbidden, MediaTypeNames.Application.ProblemJson)] // ModuleNotOwned
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status404NotFound, MediaTypeNames.Application.ProblemJson)] // ModuleNotFound
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status409Conflict, MediaTypeNames.Application.ProblemJson)] // VersionAlreadyExists
     public async Task<IActionResult> PublishVersion(
         [FromRoute] string moduleId,
         [FromRoute] string moduleVersion,
@@ -86,7 +97,7 @@ public class CiCdController : OpenShockControllerBase
         var file = Request.Form.Files.GetFile("zip");
         if (file == null)
         {
-            return BadRequest(new { error = "No file uploaded. Expected a file field named 'zip'." });
+            return Problem(ModuleError.ZipMissing);
         }
 
         // Read file into memory for validation + hashing + storage upload

@@ -13,8 +13,8 @@ public enum ChangelogParseError
 
 /// <summary>
 /// Parses the <c>changelog</c> markdown submitted by CI/CD into structured
-/// <see cref="FirmwareReleaseNoteDto"/> entries. Pure function; see firmware-api-spec.md §5.3
-/// for the exact grammar.
+/// <see cref="FirmwareReleaseNoteDto"/> entries. Pure function; this class is the definition
+/// of the accepted grammar.
 /// </summary>
 public static class ChangelogParser
 {
@@ -50,9 +50,9 @@ public static class ChangelogParser
 
         void FlushSection()
         {
-            // Prose and bullets can coexist in one section — see the "Features" section of the
-            // worked example in firmware-api-spec.md §5.3, where the introductory sentence is its
-            // own note followed by the bullet notes. Emitting prose first preserves that order.
+            // Prose and bullets can coexist in one section: an introductory sentence followed by
+            // bullets becomes its own note followed by the bullet notes. Emitting prose first
+            // preserves that order.
             if (buffer.Count > 0)
             {
                 AddNote(string.Join("\n", buffer.Select(l => l.TrimEnd())));

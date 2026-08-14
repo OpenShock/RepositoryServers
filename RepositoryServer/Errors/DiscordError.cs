@@ -1,7 +1,7 @@
 using System.Net;
 using OpenShock.Internal.Common.Problems;
 
-namespace OpenShock.RepositoryServer.Problems;
+namespace OpenShock.RepositoryServer.Errors;
 
 public static class DiscordError
 {

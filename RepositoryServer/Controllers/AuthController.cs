@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OpenShock.Internal.Common;
+using OpenShock.Internal.Common.Problems;
 using OpenShock.RepositoryServer.AuthenticationHandlers;
 using OpenShock.RepositoryServer.Errors;
 using System.Net.Mime;
@@ -32,8 +33,12 @@ public sealed class AuthController : OpenShockControllerBase
     /// <summary>
     /// Starts the GitHub login. Returns a redirect to GitHub's authorization page.
     /// </summary>
+    /// <response code="302">Redirect to GitHub, or straight to <paramref name="returnUrl"/> under the development bypass.</response>
+    /// <response code="400">The return url is not a relative path on this server.</response>
     [HttpGet("login")]
     [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status302Found)]
+    [ProducesResponseType<OpenShockProblem>(StatusCodes.Status400BadRequest, MediaTypeNames.Application.ProblemJson)] // InvalidReturnUrl
     public IActionResult Login([FromQuery] string? returnUrl)
     {
         // An open redirect here would be worth something: the victim arrives from a real login on the

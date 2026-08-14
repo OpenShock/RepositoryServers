@@ -9,7 +9,7 @@ namespace OpenShock.RepositoryServer.Services;
 /// <summary>
 /// Periodic cleanup of expired staged firmware releases. Runs every 5 minutes. Two TTLs:
 /// <c>StagedReleaseTtl</c> (default 1h) for abandoned CI releases, <c>EditingReleaseTtl</c>
-/// (default 7d) for releases waiting on janitor review. See firmware-api-spec.md §5.4.
+/// (default 7d) for releases waiting on janitor review.
 /// </summary>
 public sealed class StagedReleaseCleanupService : BackgroundService
 {
