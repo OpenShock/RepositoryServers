@@ -20,7 +20,7 @@ public class ApiConfig
     /// <summary>Development-only overrides. Has no effect in a published build.</summary>
     public DevAuthConfig DevAuth { get; init; } = new();
 
-    [Required] public required RepoConfig Repo { get; init; }
+    [Required] public required ModulesConfig Modules { get; init; }
     [Required] public required FirmwareConfig Firmware { get; init; }
 
     /// <summary>

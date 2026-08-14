@@ -57,10 +57,10 @@ public sealed class RepoController : OpenShockControllerBase
 
         var repository = new Repository
         {
-            Id = _apiConfig.Repo.Id,
-            Name = _apiConfig.Repo.Name,
-            Author = _apiConfig.Repo.Author,
-            Homepage = _apiConfig.Repo.Homepage,
+            Id = _apiConfig.Modules.Id,
+            Name = _apiConfig.Modules.Name,
+            Author = _apiConfig.Modules.Author,
+            Homepage = _apiConfig.Modules.Homepage,
             Modules = modules
         };
 

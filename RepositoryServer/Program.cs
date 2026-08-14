@@ -129,8 +129,7 @@ else
     if (!string.IsNullOrWhiteSpace(github.DataProtectionKeyPath))
     {
         builder.Services.AddDataProtection()
-            .PersistKeysToFileSystem(new DirectoryInfo(github.DataProtectionKeyPath))
-            .SetApplicationName("OpenShock.RepositoryServer");
+            .PersistKeysToDbContext<RepoServerContext>();
     }
 }
 

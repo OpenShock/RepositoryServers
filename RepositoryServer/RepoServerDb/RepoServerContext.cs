@@ -1,4 +1,5 @@
 using EntityFramework.Exceptions.PostgreSQL;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using OpenShock.RepositoryServer.Enums;
 using OpenShock.RepositoryServer.RepoServerDb.Models;
@@ -47,7 +48,7 @@ public sealed class MigrationOpenShockContext : RepoServerContext
     }
 }
 
-public class RepoServerContext : DbContext
+public class RepoServerContext : DbContext, IDataProtectionKeyContext
 {
     public RepoServerContext()
     {
@@ -97,33 +98,35 @@ public class RepoServerContext : DbContext
     }
 
     // Shared source-code repository registry (used by firmware + desktop)
-    public virtual DbSet<SourceRepository> Repositories { get; set; }
+    public  DbSet<SourceRepository> Repositories { get; set; }
 
     // Desktop module tables
-    public virtual DbSet<Module> Modules { get; set; }
-    public virtual DbSet<Version> Versions { get; set; }
+    public  DbSet<Module> Modules { get; set; }
+    public  DbSet<Version> Versions { get; set; }
 
     // Firmware tables
-    public virtual DbSet<FirmwareChip> FirmwareChips { get; set; }
-    public virtual DbSet<FirmwareBoard> FirmwareBoards { get; set; }
-    public virtual DbSet<FirmwareVersion> FirmwareVersions { get; set; }
-    public virtual DbSet<FirmwareRelease> FirmwareReleases { get; set; }
-    public virtual DbSet<FirmwareArtifact> FirmwareArtifacts { get; set; }
-    public virtual DbSet<FirmwareReleaseNote> FirmwareReleaseNotes { get; set; }
-    public virtual DbSet<FirmwareStagedArtifact> FirmwareStagedArtifacts { get; set; }
-    public virtual DbSet<FirmwareStagedReleaseNote> FirmwareStagedReleaseNotes { get; set; }
+    public  DbSet<FirmwareChip> FirmwareChips { get; set; }
+    public  DbSet<FirmwareBoard> FirmwareBoards { get; set; }
+    public  DbSet<FirmwareVersion> FirmwareVersions { get; set; }
+    public  DbSet<FirmwareRelease> FirmwareReleases { get; set; }
+    public  DbSet<FirmwareArtifact> FirmwareArtifacts { get; set; }
+    public  DbSet<FirmwareReleaseNote> FirmwareReleaseNotes { get; set; }
+    public  DbSet<FirmwareStagedArtifact> FirmwareStagedArtifacts { get; set; }
+    public  DbSet<FirmwareStagedReleaseNote> FirmwareStagedReleaseNotes { get; set; }
 
     // USB catalog (flashtool support)
-    public virtual DbSet<UsbDevice> UsbDevices { get; set; }
-    public virtual DbSet<UsbSerialFilter> UsbSerialFilters { get; set; }
-    public virtual DbSet<FirmwareChipUsbDevice> FirmwareChipUsbDevices { get; set; }
-    public virtual DbSet<FirmwareBoardUsbDevice> FirmwareBoardUsbDevices { get; set; }
+    public  DbSet<UsbDevice> UsbDevices { get; set; }
+    public  DbSet<UsbSerialFilter> UsbSerialFilters { get; set; }
+    public  DbSet<FirmwareChipUsbDevice> FirmwareChipUsbDevices { get; set; }
+    public  DbSet<FirmwareBoardUsbDevice> FirmwareBoardUsbDevices { get; set; }
 
     // Firmware advisories shown on the manifest endpoint
-    public virtual DbSet<FirmwareAdvisory> FirmwareAdvisories { get; set; }
+    public  DbSet<FirmwareAdvisory> FirmwareAdvisories { get; set; }
 
     // Discord notification targets
-    public virtual DbSet<DiscordWebhook> DiscordWebhooks { get; set; }
+    public  DbSet<DiscordWebhook> DiscordWebhooks { get; set; }
+    
+    public DbSet<DataProtectionKey> DataProtectionKeys { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
