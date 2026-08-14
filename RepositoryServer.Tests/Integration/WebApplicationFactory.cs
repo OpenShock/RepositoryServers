@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenShock.RepositoryServer.RepoServerDb;
 using OpenShock.RepositoryServer.Services;
 using OpenShock.RepositoryServer.Tests.Integration.Docker;
@@ -34,13 +34,20 @@ public sealed class WebApplicationFactory
 
     public async Task InitializeAsync()
     {
-        _ = Server; // force the host to build
+        // Schema first, host second. Npgsql reads PostgreSQL's type catalogue once, on the first
+        // connection a data source opens, and caches it for that data source's lifetime. The enum
+        // types are created by the migrations, so anything that connects before they have run leaves
+        // the host's data source permanently unable to bind release_channel, repository_provider and
+        // friends — the schema is correct and every write of an enum still fails. Building the host
+        // here rather than below is what put a startup connection ahead of the migrations.
+        await using (var migrationContext = new MigrationOpenShockContext(
+                         PostgreSql.Container.GetConnectionString(), debug: false,
+                         NullLoggerFactory.Instance))
+        {
+            await migrationContext.Database.MigrateAsync();
+        }
 
-        await using var scope = Services.CreateAsyncScope();
-        var loggerFactory = scope.ServiceProvider.GetRequiredService<ILoggerFactory>();
-        await using var migrationContext = new MigrationOpenShockContext(
-            PostgreSql.Container.GetConnectionString(), debug: false, loggerFactory);
-        await migrationContext.Database.MigrateAsync();
+        _ = Server; // force the host to build
     }
 
     /// <summary>
