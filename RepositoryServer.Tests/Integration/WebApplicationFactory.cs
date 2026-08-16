@@ -205,6 +205,13 @@ public sealed class WebApplicationFactory
             ["Firmware:Storage:Local:BasePath"] = _cdnStoragePath,
             ["Firmware:StagedReleaseTtl"] = "01:00:00",
             ["Firmware:EditingReleaseTtl"] = "7.00:00:00",
+
+            // cdn-test.openshock.example does not resolve, and is not meant to: storage here is a
+            // Local backend under _cdnStoragePath, and the assertions read it off disk. Leaving the
+            // publish-time reachability probe on would make every publish test fail on a DNS lookup
+            // for a hostname invented to be unreachable. The probe has its own tests, which point
+            // Firmware:CdnBaseUrl at the test server and check both outcomes.
+            ["Firmware:VerifyPublishedArtifacts"] = "false",
         };
         foreach (var (key, value) in settings)
         {
