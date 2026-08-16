@@ -670,8 +670,7 @@ public sealed class CatalogImportService
     // -----------------------------------------------------------------------------------------
     // Parsing
     //
-    // Ids are written the way datasheets write them, so hex is accepted with or without the 0x,
-    // and a decimal is accepted too rather than being silently read as hex.
+    // Ids are written the way datasheets write them: hex, with or without the 0x prefix.
     // -----------------------------------------------------------------------------------------
 
     private static bool TryParseVidPid(string vidText, string pidText, out int vid, out int pid)
@@ -705,20 +704,19 @@ public sealed class CatalogImportService
         value = 0;
         if (string.IsNullOrWhiteSpace(text)) return false;
 
+        // Always hex, with an optional 0x. Accepting decimal too sounds accommodating and is not:
+        // "1001" is a valid hex product id and a valid decimal number, and nothing in the string
+        // says which was meant. Guessing from the characters — digit-only means decimal — silently
+        // turns 1001 into 0x03E9, 6001 into 0x1771 and 0403 into 0x0193. All three store cleanly,
+        // match no real device, and say nothing until a board fails to be recognised. Hex is what
+        // datasheets, lsusb, esptool and the admin pages already use.
         var trimmed = text.Trim();
         if (trimmed.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
         {
-            return int.TryParse(trimmed[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value);
+            trimmed = trimmed[2..];
         }
 
-        // A bare 303A is hex; a bare 12346 is decimal. Anything with a hex digit in it can only be
-        // hex, and a pure-digit string is read as decimal, which is how both notations coexist.
-        if (trimmed.Any(c => c is >= 'a' and <= 'f' or >= 'A' and <= 'F'))
-        {
-            return int.TryParse(trimmed, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value);
-        }
-
-        return int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+        return int.TryParse(trimmed, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value);
     }
 
     private static string VidPidKey(int vid, int? pid) =>

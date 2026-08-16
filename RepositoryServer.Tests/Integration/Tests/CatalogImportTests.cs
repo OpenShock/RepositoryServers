@@ -211,14 +211,15 @@ public class CatalogImportTests
     }
 
     /// <summary>
-    /// Datasheets write ids in hex and the admin pages show them in hex, but a file written from a
-    /// script may carry decimals. Both have to land on the same device.
+    /// Ids are hex, with an optional 0x. The digit-only forms are the ones that matter: 1001 is
+    /// both a valid hex product id and a valid decimal number, and reading it as decimal stores
+    /// 0x03E9 — a value that saves cleanly and is only wrong later, when nothing ever matches it.
     /// </summary>
     [Test]
     [Arguments("303A", "1001")]
     [Arguments("0x303A", "0x1001")]
-    [Arguments("12346", "4097")]
-    public async Task Apply_UsbIdsAcceptHexAndDecimal(string vid, string pid)
+    [Arguments("303a", "1001")]
+    public async Task Apply_UsbIdsAreHex(string vid, string pid)
     {
         await Import(s => s.ApplyAsync(new CatalogImportDocument
         {

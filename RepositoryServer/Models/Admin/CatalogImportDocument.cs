@@ -74,17 +74,17 @@ public sealed record PublisherImport(
     string Repo,
     List<string>? Scopes = null);
 
-/// <param name="Vid">Vendor id, hex (<c>303A</c>) or decimal.</param>
-/// <param name="Pid">Product id, hex or decimal.</param>
+/// <param name="Vid">Vendor id in hex, with or without the <c>0x</c>: <c>303A</c>.</param>
+/// <param name="Pid">Product id in hex, with or without the <c>0x</c>: <c>1001</c>.</param>
 /// <param name="Name">Display name, shown when the flashtool recognises a connected device.</param>
 public sealed record UsbDeviceImport(
     string Vid,
     string Pid,
     string Name);
 
-/// <param name="Vid">Vendor id, hex or decimal.</param>
+/// <param name="Vid">Vendor id in hex, with or without the <c>0x</c>.</param>
 /// <param name="Pid">
-/// Product id. Omitted matches every product from that vendor, which is what CH340-style bridges
+/// Product id in hex. Omitted matches every product from that vendor, which is what CH340-style bridges
 /// and native USB need, since the product id varies by chip.
 /// </param>
 /// <param name="Description">Free text, for a human reading the filter list.</param>
