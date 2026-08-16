@@ -260,16 +260,29 @@ unless `OPENSHOCK__DB__SKIPMIGRATION` is set, so do not run them by hand.
 ## Seeding a fresh instance
 
 A new database has no chips and no boards, and release init rejects a board it does not know, so the
-first CI publish will fail until the catalog exists. Three things have to be created, in this order,
-by an administrator signed in at `/auth/login`:
+first CI publish will fail until the catalog exists.
+
+The quickest way to get there is `/admin/import`, which takes a JSON file describing the whole
+catalog and shows what it would create or change before writing anything. `seed/openshock-catalog.json`
+is the OpenShock one. Rows reference each other by name rather than by id — a board names its chip,
+a module names its publisher as `owner/repo` — so the same file applies to a fresh instance and an
+existing one, and re-importing it reports everything unchanged rather than duplicating it.
+
+Import never deletes: a row dropped from the file stays on the server, because removing a chip a
+board still references, or a board that published artifacts still point at, wants the individual
+pages that can name what holds the reference. Publisher scopes are the exception to "additive" —
+they are replaced, so the file is the whole grant for a repository it lists.
+
+The same three things can be created by hand instead, in this order, by an administrator signed in
+at `/auth/login`:
 
 1. **Chips**, at `/admin/firmware/chips`. Names must match esptool-js chip identifiers exactly
    (`ESP32`, `ESP32-S2`, `ESP32-S3`, `ESP32-C3`), since the web flashtool passes them straight
    through. Architecture is `xtensa` for the ESP32/S2/S3 family and `riscv` for the C3.
-2. **Boards**, at `/admin/firmware/boards`, each referencing a chip. A board's name has to match its
-   `[env:...]` name in the firmware repository's `platformio.ini` exactly, because that is what a hub
-   compiles in as `OPENSHOCK_FW_BOARD` and reports as its own board. Required artifacts are normally
-   app and staticfs, the two an OTA update must supply.
+2. **Boards**, at `/admin/firmware/boards`, each referencing a chip. A board's name has to match the
+   board name in the firmware repository exactly — its `boards/<name>.defaults` basename — because
+   that is what a hub compiles in as its board and reports as its own. Required artifacts are
+   normally app and staticfs, the two an OTA update must supply.
 3. **Publishers**, at `/admin/repositories`, one per repository allowed to publish, with the scopes it
    is granted. A repository registered with no scopes cannot publish anything.
 

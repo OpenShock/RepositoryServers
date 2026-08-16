@@ -1,0 +1,277 @@
+@page "/admin/import"
+@attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
+@using System.Text.Json
+@using OpenShock.RepositoryServer.Models.Admin
+@using OpenShock.RepositoryServer.Services.Admin
+@inherits AdminPageBase
+
+<PageHeader Title="Import">
+    <Subtitle>
+        Seeds or updates the catalog from one file: chips, boards, publishers, USB devices and serial
+        filters, and desktop modules. Nothing is written until the preview is applied.
+    </Subtitle>
+</PageHeader>
+
+@*
+    Upload, preview, apply — in that order down the page, so the sequence is the layout. The preview
+    is not a formality: an import that names a chip slightly differently creates a second chip rather
+    than editing the first, and the diff is the only place that is visible before it happens.
+*@
+<div class="flex flex-col gap-4">
+
+    <BbCard Class="w-full">
+        <BbCardHeader>
+            <BbCardTitle>File</BbCardTitle>
+            <BbCardDescription>
+                JSON. Every section is optional, and rows reference each other by name rather than by
+                id, so the same file works against a fresh instance and an existing one.
+            </BbCardDescription>
+        </BbCardHeader>
+        <BbCardContent>
+            <div class="flex flex-col gap-3">
+                <InputFile OnChange="LoadFileAsync" accept=".json"
+                           class="file:bg-secondary file:text-secondary-foreground hover:file:bg-secondary/80 border-input w-full cursor-pointer rounded-md border text-sm file:mr-4 file:cursor-pointer file:border-0 file:px-4 file:py-2"/>
+
+                @if (_fileName is not null)
+                {
+                    <p class="text-muted-foreground text-sm">
+                        @_fileName, @_itemCount row@(_itemCount == 1 ? "" : "s")
+                    </p>
+                }
+
+                @if (_parseError is not null)
+                {
+                    <p class="text-destructive text-sm">@_parseError</p>
+                }
+            </div>
+        </BbCardContent>
+    </BbCard>
+
+    @if (_plan is { } plan)
+    {
+        <BbCard Class="w-full overflow-hidden p-0">
+            <BbCardHeader Class="p-6 pb-0">
+                <BbCardTitle>@(_applied ? "Result" : "Preview")</BbCardTitle>
+                <BbCardDescription>
+                    @if (_applied)
+                    {
+                        @("Applied. Re-importing the same file again would report everything unchanged.")
+                    }
+                    else if (plan.Blocked > 0)
+                    {
+                        @("Nothing can be applied while a row is blocked — a partly-seeded catalog looks complete and fails later, at a publish.")
+                    }
+                    else if (!plan.CanApply)
+                    {
+                        @("Everything in this file already matches the server.")
+                    }
+                    else
+                    {
+                        @("Nothing has been written yet.")
+                    }
+                </BbCardDescription>
+            </BbCardHeader>
+
+            <BbCardContent Class="p-6 pt-4">
+                <div class="mb-4 flex flex-wrap gap-2">
+                    <BbBadge Variant="BadgeVariant.Default">@plan.Creates to create</BbBadge>
+                    <BbBadge Variant="BadgeVariant.Secondary">@plan.Updates to update</BbBadge>
+                    <BbBadge Variant="BadgeVariant.Outline">@plan.Unchanged unchanged</BbBadge>
+                    @if (plan.Blocked > 0)
+                    {
+                        <BbBadge Variant="BadgeVariant.Destructive">@plan.Blocked blocked</BbBadge>
+                    }
+                </div>
+
+                <BbDataGrid TData="ImportItem" Items="_rows" Striped="true" StickyHeader="true">
+                    <Columns>
+                        <BbDataGridPropertyColumn TData="ImportItem" TProp="string" Property="i => i.Section" Title="Kind"/>
+                        <BbDataGridPropertyColumn TData="ImportItem" TProp="string" Property="i => i.Key" Title="Name"/>
+                        <BbDataGridTemplateColumn TData="ImportItem" Title="Action">
+                            <BbBadge Variant="@BadgeFor(context.Action)">@Label(context.Action)</BbBadge>
+                        </BbDataGridTemplateColumn>
+                        <BbDataGridTemplateColumn TData="ImportItem" Title="Detail" Sortable="false">
+                            <span class="@(context.Action == ImportAction.Blocked ? "text-destructive" : "text-muted-foreground")">
+                                @context.Detail
+                            </span>
+                        </BbDataGridTemplateColumn>
+                    </Columns>
+                </BbDataGrid>
+            </BbCardContent>
+
+            @if (!_applied)
+            {
+                <BbCardFooter Class="flex justify-end gap-2 p-6 pt-0">
+                    <BbButton Variant="ButtonVariant.Outline" OnClick="Reset">Cancel</BbButton>
+                    <BbButton OnClick="ApplyAsync" Disabled="@(!plan.CanApply || _applying)">
+                        @(_applying ? "Applying..." : "Apply")
+                    </BbButton>
+                </BbCardFooter>
+            }
+        </BbCard>
+    }
+
+    <BbCard Class="w-full">
+        <BbCardHeader>
+            <BbCardTitle>Format</BbCardTitle>
+            <BbCardDescription>
+                Vendor and product ids take hex or decimal. A board with no <code>requiredArtifacts</code>
+                gets <code>app</code> and <code>staticfs</code>, which is what an OTA update needs.
+            </BbCardDescription>
+        </BbCardHeader>
+        <BbCardContent>
+            <pre class="bg-muted overflow-x-auto rounded-md p-4 text-xs"><code>@ExampleDocument</code></pre>
+        </BbCardContent>
+    </BbCard>
+</div>
+
+@code {
+    // Large enough for a full catalog many times over, small enough that a mis-selected file is
+    // rejected rather than buffered.
+    private const long MaxFileSize = 2 * 1024 * 1024;
+
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        AllowTrailingCommas = true,
+        ReadCommentHandling = JsonCommentHandling.Skip
+    };
+
+    private const string ExampleDocument = """
+        {
+          "chips": [
+            { "name": "ESP32-S3", "architecture": "xtensa", "usbDevices": ["303A:1001"] }
+          ],
+          "boards": [
+            { "name": "OpenShock-Core-V2", "chip": "ESP32-S3" },
+            { "name": "Wemos-D1-Mini-ESP32", "chip": "ESP32",
+              "requiredArtifacts": ["app", "staticfs"], "usbDevices": ["10C4:EA60"] }
+          ],
+          "repositories": [
+            { "owner": "OpenShock", "repo": "Firmware", "scopes": ["publish_firmware"] }
+          ],
+          "usbDevices": [
+            { "vid": "303A", "pid": "1001", "name": "Espressif native USB" }
+          ],
+          "usbSerialFilters": [
+            { "vid": "1A86", "description": "WCH CH340 / CH9102" }
+          ],
+          "modules": [
+            { "id": "forzashock", "name": "ForzaShock", "description": "Forza Horizon integration.",
+              "repository": "OpenShock/Desktop-Modules" }
+          ]
+        }
+        """;
+
+    private CatalogImportDocument? _document;
+    private ImportPlan? _plan;
+    private IQueryable<ImportItem> _rows = Array.Empty<ImportItem>().AsQueryable();
+
+    private string? _fileName;
+    private string? _parseError;
+    private int _itemCount;
+    private bool _applying;
+    private bool _applied;
+
+    private async Task LoadFileAsync(InputFileChangeEventArgs e)
+    {
+        Reset();
+        _fileName = e.File.Name;
+
+        try
+        {
+            await using var stream = e.File.OpenReadStream(MaxFileSize);
+            _document = await JsonSerializer.DeserializeAsync<CatalogImportDocument>(stream, JsonOptions);
+        }
+        catch (JsonException ex)
+        {
+            // The parser's message names the line and position, which is the only thing that makes a
+            // hand-written file fixable without guessing.
+            _parseError = $"Not valid JSON: {ex.Message}";
+            return;
+        }
+        catch (IOException)
+        {
+            _parseError = $"File is larger than {MaxFileSize / 1024 / 1024} MB.";
+            return;
+        }
+
+        if (_document is null || _document.IsEmpty)
+        {
+            _parseError = "The file parsed, but every section is empty.";
+            _document = null;
+            return;
+        }
+
+        _itemCount = _document.Chips.Count + _document.Boards.Count + _document.Repositories.Count
+                     + _document.UsbDevices.Count + _document.UsbSerialFilters.Count + _document.Modules.Count;
+
+        await PlanAsync();
+    }
+
+    private async Task PlanAsync()
+    {
+        if (_document is null) return;
+
+        await using var scope = CreateScope();
+        _plan = await scope.Get<CatalogImportService>().PlanAsync(_document);
+        _rows = _plan.Items.AsQueryable();
+    }
+
+    private async Task ApplyAsync()
+    {
+        if (_document is null || _plan is null) return;
+
+        _applying = true;
+        try
+        {
+            await using var scope = CreateScope();
+            var result = await scope.Get<CatalogImportService>().ApplyAsync(_document);
+
+            _plan = result;
+            _rows = result.Items.AsQueryable();
+
+            if (result.Blocked > 0)
+            {
+                // ApplyAsync re-plans before writing, so blocked rows here mean the database moved
+                // between the preview and the click.
+                ReportError($"{result.Blocked} row(s) could not be applied. Nothing was written.");
+                return;
+            }
+
+            _applied = true;
+            Report(null, $"Imported {result.Items.Count} row(s).");
+        }
+        finally
+        {
+            _applying = false;
+        }
+    }
+
+    private void Reset()
+    {
+        _document = null;
+        _plan = null;
+        _rows = Array.Empty<ImportItem>().AsQueryable();
+        _parseError = null;
+        _fileName = null;
+        _itemCount = 0;
+        _applied = false;
+    }
+
+    private static string Label(ImportAction action) => action switch
+    {
+        ImportAction.Create => "create",
+        ImportAction.Update => "update",
+        ImportAction.Unchanged => "unchanged",
+        _ => "blocked"
+    };
+
+    private static BadgeVariant BadgeFor(ImportAction action) => action switch
+    {
+        ImportAction.Create => BadgeVariant.Default,
+        ImportAction.Update => BadgeVariant.Secondary,
+        ImportAction.Unchanged => BadgeVariant.Outline,
+        _ => BadgeVariant.Destructive
+    };
+}
