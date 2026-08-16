@@ -35,6 +35,15 @@ public static class FirmwareError
         new("Firmware.Sha256Mismatch", "Uploaded artifact hash does not match the provided SHA-256 manifest", HttpStatusCode.BadRequest, detail);
     public static OpenShockProblem FirmwareManifestKeysMismatch(string detail) =>
         new("Firmware.ManifestKeysMismatch", "The SHA-256 manifest keys do not match the uploaded files", HttpStatusCode.BadRequest, detail);
+    /// <summary>
+    /// The artifacts were promoted but are not retrievable at the URLs this server advertises, so
+    /// the release was rolled back instead of published.
+    /// </summary>
+    public static OpenShockProblem FirmwareArtifactsNotRetrievable(string detail) =>
+        new("Firmware.ArtifactsNotRetrievable",
+            "Published artifacts are not retrievable at the configured CDN base URL",
+            HttpStatusCode.InternalServerError, detail);
+
     public static OpenShockProblem FirmwareReleaseNotesNotFinalized =>
         new("Firmware.ReleaseNotesNotFinalized", "Release notes must be finalized before publish", HttpStatusCode.Conflict);
 

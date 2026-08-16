@@ -55,6 +55,7 @@ through `appsettings.Custom.json`, user secrets or command line arguments.
 | `OPENSHOCK__FIRMWARE__STORAGE__TYPE`  | x        | `Local`                              | `Local`, `S3`, `BunnyCdn`                                                                                  |
 | `OPENSHOCK__FIRMWARE__STAGEDRELEASETTL`  |       | `01:00:00`                           | How long a release may sit in `staging` before it is aborted                                               |
 | `OPENSHOCK__FIRMWARE__EDITINGRELEASETTL` |       | `7.00:00:00`                         | How long a release may sit in `editing` before it is aborted                                               |
+| `OPENSHOCK__FIRMWARE__VERIFYPUBLISHEDARTIFACTS` |  | `true`                          | Check each artifact is retrievable at `CDNBASEURL` before publishing, and refuse to publish if not          |
 | `OPENSHOCK__REPO__ID`                 | x        |                                      | `openshock-desktop-modules`                                                                                |
 | `OPENSHOCK__REPO__NAME`               | x        |                                      | `OpenShock Modules`                                                                                        |
 | `OPENSHOCK__REPO__AUTHOR`             | x        |                                      | `OpenShock`                                                                                                |
@@ -232,6 +233,16 @@ PUT    /2/firmware/releases/{id}/boards/{board}   upload artifacts, multipart, 6
 POST   /2/firmware/releases/{id}/publish          promote to live
 DELETE /2/firmware/releases/{id}                  abort and clean up
 ```
+
+Publish promotes the staged objects to their published keys, then checks each one is actually
+retrievable at the URL it is about to advertise, and only commits if they all are. Uploading to
+storage and serving from `CDNBASEURL` are independent facts: an instance writing to a `Local`
+backend while advertising a CDN, or to a bucket that CDN is not fronting, uploads every artifact
+successfully and would otherwise publish a version whose every download is a 404. Nothing about
+that release looks wrong through the API — the hashes and sizes are right — so the client that
+finds out is a hub partway through an update. A failed check rolls the promotion back and returns
+`Firmware.ArtifactsNotRetrievable`. Set `VERIFYPUBLISHEDARTIFACTS=false` only where the server
+genuinely cannot reach its own CDN hostname.
 
 Uploads carry a `sha256` form field mapping each artifact type to its expected hash, and the whole
 request is verified before anything is written. If the changelog fails to parse, init returns 400 and

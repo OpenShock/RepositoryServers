@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using Asp.Versioning;
 using EntityFramework.Exceptions.PostgreSQL;
 using Microsoft.AspNetCore.Authentication;
@@ -305,6 +305,13 @@ builder.Services.AddScoped<ModuleAdminService>();
 // Composes the services above rather than writing itself, so a bulk import is held to the same
 // invariants as the equivalent clicking.
 builder.Services.AddScoped<CatalogImportService>();
+
+// Typed client: publish probes the artifact URLs it is about to advertise, and a hostname that
+// black-holes must fail the publish quickly rather than hold the request open.
+builder.Services.AddHttpClient<PublishedArtifactVerifier>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
 
 // <---- Background cleanup ---->
 builder.Services.AddHostedService<StagedReleaseCleanupService>();

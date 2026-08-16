@@ -46,6 +46,7 @@ public class ReleasesController : OpenShockControllerBase
     private readonly ApiConfig _apiConfig;
     private readonly IDiscordNotificationService _discord;
     private readonly TimeProvider _timeProvider;
+    private readonly PublishedArtifactVerifier _artifactVerifier;
     private readonly ILogger<ReleasesController> _logger;
 
     public ReleasesController(
@@ -54,6 +55,7 @@ public class ReleasesController : OpenShockControllerBase
         ApiConfig apiConfig,
         IDiscordNotificationService discord,
         TimeProvider timeProvider,
+        PublishedArtifactVerifier artifactVerifier,
         ILogger<ReleasesController> logger)
     {
         _db = db;
@@ -61,6 +63,7 @@ public class ReleasesController : OpenShockControllerBase
         _apiConfig = apiConfig;
         _discord = discord;
         _timeProvider = timeProvider;
+        _artifactVerifier = artifactVerifier;
         _logger = logger;
     }
 
@@ -517,6 +520,38 @@ public class ReleasesController : OpenShockControllerBase
             _logger.LogError(ex, "Failed to promote staged artifacts for release {ReleaseId}", release.Id);
             await TryDeleteAllAsync(promoted, ct);
             throw;
+        }
+
+        // The copy above succeeded, which only says the storage backend accepted it. Whether those
+        // bytes are reachable at the URL this server is about to advertise is a separate fact, and
+        // one nothing here has ever established: uploads go through IStorageService, URLs come from
+        // Firmware:CdnBaseUrl, and an instance where those two do not refer to the same place
+        // publishes a version whose every artifact 404s. That release looks entirely healthy through
+        // the API - correct hashes, correct sizes - and the client that discovers otherwise is a hub
+        // partway through an OTA update.
+        //
+        // Checked before the transaction commits, so a release that cannot be downloaded does not
+        // become a release. Rolls the promotion back on failure, exactly as a copy error does.
+        var unreachable = await _artifactVerifier.FindUnreachableAsync(
+            release.Version,
+            release.StagedArtifacts.Select(a => (a.BoardId, a.ArtifactType)),
+            ct);
+
+        if (unreachable.Count > 0)
+        {
+            await TryDeleteAllAsync(promoted, ct);
+
+            var detail = string.Join("; ", unreachable.Take(5).Select(u => $"{u.Url} -> {u.Detail}"));
+            if (unreachable.Count > 5)
+            {
+                detail += $" (and {unreachable.Count - 5} more)";
+            }
+
+            _logger.LogError(
+                "Refusing to publish {Version}: {Count} artifact(s) not retrievable at the configured CDN base URL",
+                release.Version, unreachable.Count);
+
+            return Problem(FirmwareError.FirmwareArtifactsNotRetrievable(detail));
         }
 
         await using var transaction = await _db.Database.BeginTransactionAsync(ct);
