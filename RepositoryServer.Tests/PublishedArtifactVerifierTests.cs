@@ -85,7 +85,7 @@ public class PublishedArtifactVerifierTests
         var unreachable = await Build(new StubHandler(HttpStatusCode.NotFound))
             .FindUnreachableAsync("1.0.0", OneArtifact);
 
-        await Assert.That(unreachable).HasCount(1);
+        await Assert.That(unreachable).Count().IsEqualTo(1);
         await Assert.That(unreachable[0].Status).IsEqualTo(HttpStatusCode.NotFound);
         await Assert.That(unreachable[0].Url).Contains("1.0.0");
     }
@@ -110,7 +110,7 @@ public class PublishedArtifactVerifierTests
 
         var unreachable = await Build(handler).FindUnreachableAsync("1.0.0", OneArtifact);
 
-        await Assert.That(unreachable).HasCount(1);
+        await Assert.That(unreachable).Count().IsEqualTo(1);
         await Assert.That(unreachable[0].Status).IsNull();
     }
 
