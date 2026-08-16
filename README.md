@@ -263,7 +263,8 @@ A new database has no chips and no boards, and release init rejects a board it d
 first CI publish will fail until the catalog exists.
 
 The quickest way to get there is `/admin/import`, which takes a JSON file describing the whole
-catalog and shows what it would create or change before writing anything. `seed/openshock-catalog.json`
+catalog and shows what it would create or change before writing anything. Comments and trailing
+commas are accepted, so a catalog kept in git can carry its own notes; `seed/openshock-catalog.jsonc`
 is the OpenShock one. Rows reference each other by name rather than by id — a board names its chip,
 a module names its publisher as `owner/repo` — so the same file applies to a fresh instance and an
 existing one, and re-importing it reports everything unchanged rather than duplicating it.

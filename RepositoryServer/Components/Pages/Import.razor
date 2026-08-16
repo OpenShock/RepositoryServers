@@ -23,13 +23,16 @@
         <BbCardHeader>
             <BbCardTitle>File</BbCardTitle>
             <BbCardDescription>
-                JSON. Every section is optional, and rows reference each other by name rather than by
-                id, so the same file works against a fresh instance and an existing one.
+                JSON, or JSONC — comments and trailing commas are accepted. Every section is optional,
+                and rows reference each other by name rather than by id, so the same file works
+                against a fresh instance and an existing one.
             </BbCardDescription>
         </BbCardHeader>
         <BbCardContent>
             <div class="flex flex-col gap-3">
-                <InputFile OnChange="LoadFileAsync" accept=".json"
+                @* .jsonc as well as .json: the parser skips comments, and a catalog worth keeping
+                   in git tends to want them for the sources behind its USB ids. *@
+                <InputFile OnChange="LoadFileAsync" accept=".json,.jsonc"
                            class="file:bg-secondary file:text-secondary-foreground hover:file:bg-secondary/80 border-input w-full cursor-pointer rounded-md border text-sm file:mr-4 file:cursor-pointer file:border-0 file:px-4 file:py-2"/>
 
                 @if (_fileName is not null)

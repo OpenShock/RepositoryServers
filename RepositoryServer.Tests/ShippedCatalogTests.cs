@@ -4,7 +4,7 @@ using System.Text.Json;
 namespace OpenShock.RepositoryServer.Tests;
 
 /// <summary>
-/// Guards <c>seed/openshock-catalog.json</c>, the file an operator imports to seed an instance.
+/// Guards <c>seed/openshock-catalog.jsonc</c>, the file an operator imports to seed an instance.
 /// </summary>
 /// <remarks>
 /// It is checked in, so it can rot: a board renamed in the firmware repository, a chip reference
@@ -40,7 +40,7 @@ public class ShippedCatalogTests
                 $"Could not locate RepositoryServer.slnx above '{AppContext.BaseDirectory}'.");
         }
 
-        var path = Path.Combine(directory.FullName, "seed", "openshock-catalog.json");
+        var path = Path.Combine(directory.FullName, "seed", "openshock-catalog.jsonc");
         var document = JsonSerializer.Deserialize<CatalogImportDocument>(File.ReadAllText(path), JsonOptions);
 
         return document!;
