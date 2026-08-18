@@ -151,7 +151,7 @@ public class CiCdController : OpenShockControllerBase
         // Upload to storage
         var storagePath = $"modules/{moduleId}/{moduleVersion}/module.zip";
         using var uploadStream = new MemoryStream(fileBytes);
-        await _storage.UploadFileAsync(storagePath, uploadStream);
+        await _storage.UploadFileAsync(storagePath, uploadStream, publicRead: true);
 
         // Construct public download URL
         var cdnBase = _apiConfig.Modules.CdnBaseUrl.TrimEnd('/');

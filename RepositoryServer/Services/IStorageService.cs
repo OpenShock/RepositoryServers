@@ -7,8 +7,9 @@ public interface IStorageService
     /// </summary>
     /// <param name="path">Path relative to storage root, e.g. "1.0.0/board-name/app.bin"</param>
     /// <param name="content">File content stream</param>
+    /// <param name="publicRead">Whether the object is served to the world at <c>CdnBaseUrl</c>.</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    Task UploadFileAsync(string path, Stream content, CancellationToken cancellationToken = default);
+    Task UploadFileAsync(string path, Stream content, bool publicRead, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Copies a file within storage, overwriting the destination.
@@ -20,8 +21,9 @@ public interface IStorageService
     /// </remarks>
     /// <param name="sourcePath">Existing path relative to storage root.</param>
     /// <param name="destinationPath">Path to copy to, relative to storage root.</param>
+    /// <param name="publicRead">Whether the destination is served to the world at <c>CdnBaseUrl</c>.</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    Task CopyFileAsync(string sourcePath, string destinationPath, CancellationToken cancellationToken = default);
+    Task CopyFileAsync(string sourcePath, string destinationPath, bool publicRead, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Deletes a file from storage.
