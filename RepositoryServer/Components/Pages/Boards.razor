@@ -24,13 +24,13 @@
             </EmptyTemplate>
             <Columns>
                 <BbDataGridPropertyColumn TData="FirmwareBoard" TProp="string" Property="b => b.Name"
-                                          Title="Name">
+                                          Id="board-name" Title="Name">
                     <CellTemplate>
                         <code>@context.Name</code>
                     </CellTemplate>
                 </BbDataGridPropertyColumn>
                 <BbDataGridPropertyColumn TData="FirmwareBoard" TProp="string"
-                                          Property="b => b.ChipNavigation.Name" Title="Chip"/>
+                                          Property="b => b.ChipNavigation.Name" Id="chip-name" Title="Chip"/>
                 <BbDataGridTemplateColumn TData="FirmwareBoard" Title="Required artifacts" Sortable="false">
                     @if (context.RequiredArtifactTypes.Length == 0)
                     {
