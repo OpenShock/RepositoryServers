@@ -306,6 +306,19 @@ builder.Services.AddScoped<ModuleAdminService>();
 // invariants as the equivalent clicking.
 builder.Services.AddScoped<CatalogImportService>();
 
+// Typed client: the publishers page offers an owner's public repositories to pick from. The call
+// carries no credential - listing public repositories needs none - so this widens nothing about the
+// admin login, and the timeout keeps a slow GitHub from holding the dialog open.
+builder.Services.AddSingleton(new GitHubOwnerDefaults(config.GitHub?.Organization));
+builder.Services.AddHttpClient<GitHubPublicRepositoryService>(client =>
+{
+    client.BaseAddress = new Uri("https://api.github.com/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+
+    // GitHub answers 403 to a request without one.
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("OpenShock.RepositoryServer");
+});
+
 // Typed client: publish probes the artifact URLs it is about to advertise, and a hostname that
 // black-holes must fail the publish quickly rather than hold the request open.
 builder.Services.AddHttpClient<PublishedArtifactVerifier>(client =>

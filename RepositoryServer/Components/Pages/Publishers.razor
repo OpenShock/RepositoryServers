@@ -1,6 +1,7 @@
 @page "/admin/repositories"
 @attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
 @using OpenShock.RepositoryServer.RepoServerDb.Models
+@using BlazorBlueprint.Primitives
 @inherits AdminPageBase
 
 <PageHeader Title="Publishers">
@@ -90,14 +91,58 @@
                     </BbSelectContent>
                 </BbSelect>
             </div>
-            <div class="flex flex-col gap-2">
-                <BbLabel For="owner">Owner</BbLabel>
-                <BbInput Id="owner" @bind-Value="_owner" Placeholder="OpenShock"/>
-            </div>
-            <div class="flex flex-col gap-2">
-                <BbLabel For="repo">Repository</BbLabel>
-                <BbInput Id="repo" @bind-Value="_repo" Placeholder="firmware"/>
-            </div>
+            <BbTabs @bind-Value="_entryMode">
+                <BbTabsList Class="w-full">
+                    <BbTabsTrigger Value="@BrowseTab">Browse @(_provider.ToString().ToLowerInvariant())</BbTabsTrigger>
+                    <BbTabsTrigger Value="@ManualTab">Enter manually</BbTabsTrigger>
+                </BbTabsList>
+
+                <BbTabsContent Value="@BrowseTab" Class="flex flex-col gap-4 pt-4">
+                    <div class="flex flex-col gap-2">
+                        <BbLabel For="browse-owner">User or organization</BbLabel>
+                        <div class="flex items-center gap-2">
+                            <BbInput Id="browse-owner" Class="flex-1" Placeholder="OpenShock"
+                                     @bind-Value="_owner" @bind-Value:after="LoadRepositoriesAsync"/>
+                            <BbButton Variant="ButtonVariant.Outline" Size="ButtonSize.IconSmall"
+                                      OnClick="LoadRepositoriesAsync" Disabled="_repositoriesLoading"
+                                      AriaLabel="List repositories" title="List repositories">
+                                @if (_repositoriesLoading)
+                                {
+                                    <BbSpinner Size="SpinnerSize.Small"/>
+                                }
+                                else
+                                {
+                                    <Glyph Name="IconName.Refresh"/>
+                                }
+                            </BbButton>
+                        </div>
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <BbLabel>Repository</BbLabel>
+                        <BbCombobox TValue="string" Options="RepositoryOptions" Value="@_repo"
+                                    ValueChanged="SelectRepositoryAsync" MatchTriggerWidth="true"
+                                    IsLoading="_repositoriesLoading"
+                                    Placeholder="select a repository"
+                                    SearchPlaceholder="filter repositories"
+                                    EmptyMessage="@RepositoryEmptyMessage"/>
+                        <p class="text-muted-foreground text-xs">
+                            Public repositories only. GitHub is asked without a credential, so a private
+                            repository never appears here and has to be entered by hand.
+                        </p>
+                    </div>
+                </BbTabsContent>
+
+                <BbTabsContent Value="@ManualTab" Class="flex flex-col gap-4 pt-4">
+                    <div class="flex flex-col gap-2">
+                        <BbLabel For="owner">Owner</BbLabel>
+                        <BbInput Id="owner" @bind-Value="_owner" Placeholder="OpenShock"/>
+                    </div>
+                    <div class="flex flex-col gap-2">
+                        <BbLabel For="repo">Repository</BbLabel>
+                        <BbInput Id="repo" @bind-Value="_repo" Placeholder="firmware"/>
+                    </div>
+                </BbTabsContent>
+            </BbTabs>
             <div class="flex flex-col gap-2">
                 <BbLabel>Scopes</BbLabel>
                 @foreach (var scope in Scopes)
@@ -127,11 +172,29 @@
     private SourceRepository[] _repositories = [];
     private bool _loading = true;
 
+    private const string BrowseTab = "browse";
+    private const string ManualTab = "manual";
+
     private bool _formOpen;
     private RepositoryProvider _provider = RepositoryProvider.Github;
     private string _owner = string.Empty;
     private string _repo = string.Empty;
     private readonly HashSet<RepositoryScope> _scopes = [];
+
+    private string _entryMode = ManualTab;
+    private GitHubRepositoryRef[] _ownerRepositories = [];
+    private bool _repositoriesLoading;
+    private string? _listedOwner;
+
+    [Inject] private GitHubPublicRepositoryService GitHub { get; set; } = null!;
+
+    private IEnumerable<SelectOption<string>> RepositoryOptions =>
+        _ownerRepositories.Select(r => new SelectOption<string>(r.Repo, r.Repo));
+
+    private string RepositoryEmptyMessage =>
+        _listedOwner is null
+            ? "Enter a user or organization first."
+            : $"No public repositories found for {_listedOwner}.";
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -149,10 +212,17 @@
         else _scopes.Remove(scope);
     }
 
-    private void OpenCreate()
+    private async Task OpenCreate()
     {
         ResetForm();
         _formOpen = true;
+
+        // Registering a repository of the organization admins log in through is the ordinary case,
+        // so that listing is fetched up front and the dialog opens on a populated picker.
+        _owner = GitHub.DefaultOwner ?? string.Empty;
+        _entryMode = _owner.Length == 0 ? ManualTab : BrowseTab;
+
+        if (_entryMode == BrowseTab) await LoadRepositoriesAsync();
     }
 
     private void OpenEdit(SourceRepository repository)
@@ -163,6 +233,12 @@
         _repo = repository.Repo;
         _scopes.Clear();
         foreach (var scope in repository.Scopes) _scopes.Add(scope);
+
+        // Editing an existing publisher is almost always a scope change, and the identity is
+        // already correct. The manual tab shows it as stored rather than inviting a re-pick that
+        // could silently retarget the grant.
+        _entryMode = ManualTab;
+        ClearRepositoryListing();
     }
 
     private void ResetForm()
@@ -171,6 +247,58 @@
         _owner = string.Empty;
         _repo = string.Empty;
         _scopes.Clear();
+        _entryMode = ManualTab;
+        ClearRepositoryListing();
+    }
+
+    private void ClearRepositoryListing()
+    {
+        _ownerRepositories = [];
+        _listedOwner = null;
+    }
+
+    /// <summary>
+    /// Reads the current owner's public repositories. Repeats are cheap - the service caches per
+    /// owner - so this can run on every edit of the owner field.
+    /// </summary>
+    private async Task LoadRepositoriesAsync()
+    {
+        var owner = _owner.Trim();
+        if (owner.Length == 0)
+        {
+            ClearRepositoryListing();
+            return;
+        }
+
+        _repositoriesLoading = true;
+        try
+        {
+            _ownerRepositories = await GitHub.ListPublicRepositoriesAsync(owner);
+            _listedOwner = owner;
+        }
+        finally
+        {
+            _repositoriesLoading = false;
+        }
+
+        // A repository picked from a previous owner is not in this listing and must not stay
+        // selected, or Save would register a pair that was never on screen together.
+        if (_repo.Length != 0 && !_ownerRepositories.Any(r => r.Repo == _repo))
+        {
+            _repo = string.Empty;
+        }
+    }
+
+    private Task SelectRepositoryAsync(string? repo)
+    {
+        _repo = repo ?? string.Empty;
+
+        // Take the owner from the listing rather than from what was typed: GitHub resolves owners
+        // case-insensitively, and the row should read the way GitHub spells it.
+        var selected = _ownerRepositories.FirstOrDefault(r => r.Repo == _repo);
+        if (selected.Repo is not null) _owner = selected.Owner;
+
+        return Task.CompletedTask;
     }
 
     private async Task SaveAsync()
