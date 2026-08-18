@@ -26,8 +26,6 @@
     <PackageVersion Include="BlazorBlueprint.Components" Version="3.15.0" />
     <!-- Transitive-only pins for security advisories (GHSA-v5pm-xwqc-g5wc, GHSA-g94r-2vxg-569j, GHSA-q939-rpr3-3284) -->
     <PackageVersion Include="Microsoft.OpenApi" Version="2.7.5" />
-    <!-- Pulled in transitively by Testcontainers; <= 2025.1.0 is a high-severity advisory. -->
-    <PackageVersion Include="SSH.NET" Version="2026.0.0" />
     <PackageVersion Include="OpenTelemetry.Api" Version="1.17.0" />
     <PackageVersion Include="OneOf" Version="3.0.271" />
     <PackageVersion Include="OpenShock.Internal.Common" Version="1.1.0" />
