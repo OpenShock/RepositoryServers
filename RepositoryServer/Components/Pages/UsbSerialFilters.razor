@@ -25,13 +25,13 @@
             <Columns>
                 <BbDataGridPropertyColumn TData="UsbSerialFilter" TProp="int" Property="f => f.Vid" Title="VID">
                     <CellTemplate>
-                        <code>@Hex(context.Vid)</code>
+                        <code>@UsbIdentifier.Format(context.Vid)</code>
                     </CellTemplate>
                 </BbDataGridPropertyColumn>
                 <BbDataGridTemplateColumn TData="UsbSerialFilter" Title="PID">
                     @if (context.Pid is { } pid)
                     {
-                        <code>@Hex(pid)</code>
+                        <code>@UsbIdentifier.Format(pid)</code>
                     }
                     else
                     {
@@ -107,8 +107,6 @@
         _loading = false;
     }
 
-    private static string Hex(int value) => $"0x{value:X4}";
-
     private void OpenCreate()
     {
         _editing = false;
@@ -120,8 +118,8 @@
     {
         _editing = true;
         _formOpen = true;
-        _vid = Hex(filter.Vid);
-        _pid = filter.Pid is { } pid ? Hex(pid) : null;
+        _vid = UsbIdentifier.Format(filter.Vid);
+        _pid = filter.Pid is { } pid ? UsbIdentifier.Format(pid) : null;
         _description = filter.Description;
     }
 
@@ -167,7 +165,7 @@
 
     private async Task DeleteAsync(UsbSerialFilter filter)
     {
-        var label = filter.Pid is { } pid ? $"{Hex(filter.Vid)}:{Hex(pid)}" : $"{Hex(filter.Vid)}:any";
+        var label = filter.Pid is { } pid ? $"{UsbIdentifier.Format(filter.Vid)}:{UsbIdentifier.Format(pid)}" : $"{UsbIdentifier.Format(filter.Vid)}:any";
         if (!await ConfirmAsync("Delete filter", $"Delete the filter for {label}?")) return;
 
         await using var scope = CreateScope();

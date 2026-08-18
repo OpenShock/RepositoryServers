@@ -25,12 +25,12 @@
         <Columns>
             <BbDataGridPropertyColumn TData="UsbDevice" TProp="int" Property="d => d.Vid" Title="VID">
                 <CellTemplate>
-                    <code>@Hex(context.Vid)</code>
+                    <code>@UsbIdentifier.Format(context.Vid)</code>
                 </CellTemplate>
             </BbDataGridPropertyColumn>
             <BbDataGridPropertyColumn TData="UsbDevice" TProp="int" Property="d => d.Pid" Title="PID">
                 <CellTemplate>
-                    <code>@Hex(context.Pid)</code>
+                    <code>@UsbIdentifier.Format(context.Pid)</code>
                 </CellTemplate>
             </BbDataGridPropertyColumn>
             <BbDataGridPropertyColumn TData="UsbDevice" TProp="string" Property="d => d.Name" Title="Name"/>
@@ -99,8 +99,6 @@
         _loading = false;
     }
 
-    private static string Hex(int value) => $"0x{value:X4}";
-
     private void OpenCreate()
     {
         _editing = false;
@@ -111,8 +109,8 @@
     private void OpenEdit(UsbDevice device)
     {
         _editing = true;
-        _vid = Hex(device.Vid);
-        _pid = Hex(device.Pid);
+        _vid = UsbIdentifier.Format(device.Vid);
+        _pid = UsbIdentifier.Format(device.Pid);
         _name = device.Name;
         _formOpen = true;
     }

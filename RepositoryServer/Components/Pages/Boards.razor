@@ -162,7 +162,7 @@
                         @foreach (var device in _usbDevices)
                         {
                             <BbSelectItem TValue="Guid?" Value="@device.Id"
-                                          Text="@($"{device.Name} ({Hex(device.Vid)}:{Hex(device.Pid)})")"/>
+                                          Text="@($"{device.Name} ({UsbIdentifier.Format(device.Vid)}:{UsbIdentifier.Format(device.Pid)})")"/>
                         }
                     </BbSelectContent>
                 </BbSelect>
@@ -213,8 +213,6 @@
 
         _loading = false;
     }
-
-    private static string Hex(int value) => $"0x{value:X4}";
 
     private string AttachedDeviceNames(Guid boardId)
     {

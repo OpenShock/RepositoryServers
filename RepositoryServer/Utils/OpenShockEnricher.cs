@@ -7,6 +7,17 @@ using Serilog.Events;
 
 namespace OpenShock.RepositoryServer.Utils;
 
+/// <summary>
+/// Adds the request's caller details to every log event.
+/// </summary>
+/// <remarks>
+/// Nothing references this in code. It is wired up by name from the Serilog section of
+/// appsettings.json - <c>"Enrich": [ ... "WithOpenShockEnricher" ]</c> - which Serilog resolves by
+/// reflection against <see cref="OpenShockEnricherLoggerConfigurationExtensions"/>. A search for
+/// callers therefore finds none, and removing either type as dead code drops these properties from
+/// every log line with nothing failing to build. <see cref="ConnectionDetailsFetcher"/> is used only
+/// from here and is reachable for the same reason.
+/// </remarks>
 public sealed class OpenShockEnricher : ILogEventEnricher
 {
     private readonly IHttpContextAccessor _contextAccessor;
