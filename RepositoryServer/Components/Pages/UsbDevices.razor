@@ -1,7 +1,7 @@
 @page "/admin/firmware/usb-devices"
 @attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
 @using OpenShock.RepositoryServer.RepoServerDb.Models
-@inherits AdminPageBase
+@inherits AdminDataPageBase
 
 <PageHeader Title="USB devices">
     <Subtitle>
@@ -14,7 +14,7 @@
 </PageHeader>
 
 <BbCard Class="w-full overflow-hidden p-0">
-    <BbDataGrid TData="UsbDevice" Items="_devices" IsLoading="_loading" Striped="true" StickyHeader="true"
+    <BbDataGrid TData="UsbDevice" Items="_devices" IsLoading="Loading" Striped="true" StickyHeader="true"
                 ShowSearch="true" SearchPlaceholder="Search devices">
         <EmptyTemplate>
             <div class="flex flex-col items-center gap-3 py-12 text-center">
@@ -81,7 +81,6 @@
 
 @code {
     private UsbDevice[] _devices = [];
-    private bool _loading = true;
 
     private bool _formOpen;
     private bool _editing;
@@ -89,14 +88,9 @@
     private string _pid = string.Empty;
     private string _name = string.Empty;
 
-    protected override Task OnInitializedAsync() => LoadAsync();
-
-    private async Task LoadAsync()
+    protected override async Task LoadDataAsync(AsyncServiceScope scope)
     {
-        _loading = true;
-        await using var scope = CreateScope();
         _devices = await scope.Get<CatalogAdminService>().ListUsbDevicesAsync();
-        _loading = false;
     }
 
     private void OpenCreate()
@@ -123,29 +117,29 @@
             return;
         }
 
-        await using (var scope = CreateScope())
+        _formOpen = false;
+
+        await MutateAsync(async scope =>
         {
             await scope.Get<CatalogAdminService>().UpsertUsbDeviceAsync(vid, pid, _name);
-        }
-
-        Report(null, "Saved.");
-        _formOpen = false;
-        await LoadAsync();
+            Report(null, "Saved.");
+        });
     }
 
     private async Task DeleteAsync(UsbDevice device)
     {
         if (!await ConfirmAsync("Delete USB device", $"Delete {device.Name}?")) return;
 
-        await using var scope = CreateScope();
-        var result = await scope.Get<CatalogAdminService>().DeleteUsbDeviceAsync(device.Id);
+        await MutateAsync(async scope =>
+        {
+            var result = await scope.Get<CatalogAdminService>().DeleteUsbDeviceAsync(device.Id);
 
-        Report(
-            result.Match<string?>(
-                _ => null,
-                _ => "That device no longer exists.",
-                inUse => $"Cannot delete: still linked to {inUse.ReferencedBy}."),
-            "Deleted.");
-        await LoadAsync();
+            Report(
+                result.Match<string?>(
+                    _ => null,
+                    _ => "That device no longer exists.",
+                    inUse => $"Cannot delete: still linked to {inUse.ReferencedBy}."),
+                "Deleted.");
+        });
     }
 }

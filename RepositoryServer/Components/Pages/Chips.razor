@@ -1,7 +1,7 @@
 @page "/admin/firmware/chips"
 @attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
 @using OpenShock.RepositoryServer.RepoServerDb.Models
-@inherits AdminPageBase
+@inherits AdminDataPageBase
 
 <PageHeader Title="Chips">
     <Subtitle>
@@ -19,7 +19,7 @@
     "which record am I editing?" affordance, which a dialog title answers by itself.
 *@
 <BbCard Class="w-full overflow-hidden p-0">
-    <BbDataGrid TData="FirmwareChip" Items="_chips" IsLoading="_loading" Striped="true"
+    <BbDataGrid TData="FirmwareChip" Items="_chips" IsLoading="Loading" Striped="true"
                 StickyHeader="true">
         <EmptyTemplate>
             <div class="flex flex-col items-center gap-3 py-12 text-center">
@@ -138,7 +138,6 @@
     private FirmwareChip[] _chips = [];
     private UsbDevice[] _usbDevices = [];
     private FirmwareChipUsbDevice[] _attachments = [];
-    private bool _loading = true;
 
     private bool _formOpen;
     private Guid? _editingChipId;
@@ -150,20 +149,13 @@
     private string _attachChipName = string.Empty;
     private Guid? _attachDeviceId;
 
-    protected override Task OnInitializedAsync() => LoadAsync();
-
-    private async Task LoadAsync()
+    protected override async Task LoadDataAsync(AsyncServiceScope scope)
     {
-        _loading = true;
-
-        await using var scope = CreateScope();
         var catalog = scope.Get<CatalogAdminService>();
 
         _chips = await catalog.ListChipsAsync();
         _usbDevices = await catalog.ListUsbDevicesAsync();
         _attachments = await catalog.ListChipUsbDevicesAsync();
-
-        _loading = false;
     }
 
     private string AttachedDeviceNames(Guid chipId)
@@ -209,7 +201,9 @@
             return;
         }
 
-        await using (var scope = CreateScope())
+        _formOpen = false;
+
+        await MutateAsync(async scope =>
         {
             var catalog = scope.Get<CatalogAdminService>();
 
@@ -234,17 +228,14 @@
                         conflict => $"A chip named \"{conflict.Name}\" already exists."),
                     $"Created {_name}.");
             }
-        }
-
-        _formOpen = false;
-        await LoadAsync();
+        });
     }
 
     private async Task DeleteAsync(FirmwareChip chip)
     {
         if (!await ConfirmAsync("Delete chip", $"Delete {chip.Name}?")) return;
 
-        await using (var scope = CreateScope())
+        await MutateAsync(async scope =>
         {
             var result = await scope.Get<CatalogAdminService>().DeleteChipAsync(chip.Id);
 
@@ -254,9 +245,7 @@
                     _ => "That chip no longer exists.",
                     inUse => $"Cannot delete: still referenced by {inUse.ReferencedBy}."),
                 "Deleted.");
-        }
-
-        await LoadAsync();
+        });
     }
 
     private async Task ApplyAttachmentAsync(bool detach)
@@ -267,7 +256,9 @@
             return;
         }
 
-        await using (var scope = CreateScope())
+        _attachDeviceId = null;
+
+        await MutateAsync(async scope =>
         {
             var catalog = scope.Get<CatalogAdminService>();
 
@@ -285,9 +276,6 @@
                         missing => $"No such {missing.Reference}."),
                     "Attached.");
             }
-        }
-
-        _attachDeviceId = null;
-        await LoadAsync();
+        });
     }
 }

@@ -1,7 +1,7 @@
 @page "/admin/desktop/modules"
 @attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
 @using OpenShock.RepositoryServer.RepoServerDb.Models
-@inherits AdminPageBase
+@inherits AdminDataPageBase
 
 <PageHeader Title="Desktop modules">
     <Subtitle>
@@ -15,7 +15,7 @@
 </PageHeader>
 
 <BbCard Class="w-full overflow-hidden p-0">
-        <BbDataGrid TData="Module" Items="_modules" IsLoading="_loading" Striped="true" StickyHeader="true">
+        <BbDataGrid TData="Module" Items="_modules" IsLoading="Loading" Striped="true" StickyHeader="true">
             <EmptyTemplate>
                 <div class="flex flex-col items-center gap-3 py-12 text-center">
                     <p class="text-muted-foreground">No modules.</p>
@@ -150,7 +150,6 @@
     private Module[] _modules = [];
     private SourceRepository[] _repositories = [];
     private ModuleVersion[] _versions = [];
-    private bool _loading = true;
 
     private bool _formOpen;
     private bool _editing;
@@ -161,13 +160,8 @@
     private string? _iconUrl;
     private Guid? _repositoryId;
 
-    protected override Task OnInitializedAsync() => LoadAsync();
-
-    private async Task LoadAsync()
+    protected override async Task LoadDataAsync(AsyncServiceScope scope)
     {
-        _loading = true;
-
-        await using var scope = CreateScope();
         _modules = await scope.Get<ModuleAdminService>().ListAsync();
         _repositories = await scope.Get<PublisherAdminService>().ListAsync();
 
@@ -176,8 +170,6 @@
             .OrderBy(v => v.Module)
             .ThenBy(v => v.VersionName)
             .ToArray();
-
-        _loading = false;
     }
 
     private string? OwnerName(Guid? repositoryId)
@@ -230,21 +222,27 @@
             return;
         }
 
-        await using (var scope = CreateScope())
+        // Read the form into locals before it is cleared: the change below runs after the dialog
+        // has closed, and a field cleared underneath it would save an unnamed module.
+        var id = _id.Trim();
+        var name = _name.Trim();
+        var description = _description ?? string.Empty;
+        var repositoryId = _repositoryId;
+
+        _formOpen = false;
+        ResetForm();
+
+        await MutateAsync(async scope =>
         {
             var result = await scope.Get<ModuleAdminService>().UpsertAsync(
-                _id.Trim(), _name.Trim(), _description ?? string.Empty, sourceUrl, iconUrl, _repositoryId);
+                id, name, description, sourceUrl, iconUrl, repositoryId);
 
             Report(
                 result.Match<string?>(
                     _ => null,
                     missing => $"No such {missing.Reference}."),
                 "Saved.");
-        }
-
-        _formOpen = false;
-        ResetForm();
-        await LoadAsync();
+        });
     }
 
     private async Task DeleteAsync(Module module)
@@ -255,7 +253,7 @@
 
         if (!confirmed) return;
 
-        await using (var scope = CreateScope())
+        await MutateAsync(async scope =>
         {
             var result = await scope.Get<ModuleAdminService>().DeleteAsync(module.Id);
 
@@ -264,9 +262,7 @@
                     _ => null,
                     _ => "That module no longer exists."),
                 "Deleted.");
-        }
-
-        await LoadAsync();
+        });
     }
 
     private async Task DeleteVersionAsync(ModuleVersion version)
@@ -278,7 +274,7 @@
 
         if (!confirmed) return;
 
-        await using (var scope = CreateScope())
+        await MutateAsync(async scope =>
         {
             var result = await scope.Get<ModuleAdminService>()
                 .DeleteVersionAsync(version.Module, version.VersionName);
@@ -288,9 +284,7 @@
                     _ => null,
                     _ => "That version no longer exists."),
                 $"Withdrew {version.Module} {version.VersionName}.");
-        }
-
-        await LoadAsync();
+        });
     }
 
     private static bool TryParseUri(string? raw, out Uri? uri)

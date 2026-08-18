@@ -1,7 +1,7 @@
 @page "/admin/firmware/usb-serial-filters"
 @attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
 @using OpenShock.RepositoryServer.RepoServerDb.Models
-@inherits AdminPageBase
+@inherits AdminDataPageBase
 
 <PageHeader Title="USB serial filters">
     <Subtitle>
@@ -14,7 +14,7 @@
 </PageHeader>
 
 <BbCard Class="w-full overflow-hidden p-0">
-        <BbDataGrid TData="UsbSerialFilter" Items="_filters" IsLoading="_loading" Striped="true"
+        <BbDataGrid TData="UsbSerialFilter" Items="_filters" IsLoading="Loading" Striped="true"
                     StickyHeader="true">
             <EmptyTemplate>
                 <div class="flex flex-col items-center gap-3 py-12 text-center">
@@ -89,7 +89,6 @@
 
 @code {
     private UsbSerialFilter[] _filters = [];
-    private bool _loading = true;
 
     private bool _formOpen;
     private bool _editing;
@@ -97,14 +96,9 @@
     private string? _pid;
     private string? _description;
 
-    protected override Task OnInitializedAsync() => LoadAsync();
-
-    private async Task LoadAsync()
+    protected override async Task LoadDataAsync(AsyncServiceScope scope)
     {
-        _loading = true;
-        await using var scope = CreateScope();
         _filters = await scope.Get<CatalogAdminService>().ListUsbSerialFiltersAsync();
-        _loading = false;
     }
 
     private void OpenCreate()
@@ -152,15 +146,14 @@
 
         var description = string.IsNullOrWhiteSpace(_description) ? null : _description;
 
-        await using (var scope = CreateScope())
-        {
-            await scope.Get<CatalogAdminService>().UpsertUsbSerialFilterAsync(vid, pid, description);
-        }
-
-        Report(null, "Saved.");
         _formOpen = false;
         ResetForm();
-        await LoadAsync();
+
+        await MutateAsync(async scope =>
+        {
+            await scope.Get<CatalogAdminService>().UpsertUsbSerialFilterAsync(vid, pid, description);
+            Report(null, "Saved.");
+        });
     }
 
     private async Task DeleteAsync(UsbSerialFilter filter)
@@ -168,14 +161,15 @@
         var label = filter.Pid is { } pid ? $"{UsbIdentifier.Format(filter.Vid)}:{UsbIdentifier.Format(pid)}" : $"{UsbIdentifier.Format(filter.Vid)}:any";
         if (!await ConfirmAsync("Delete filter", $"Delete the filter for {label}?")) return;
 
-        await using var scope = CreateScope();
-        var result = await scope.Get<CatalogAdminService>().DeleteUsbSerialFilterAsync(filter.Id);
+        await MutateAsync(async scope =>
+        {
+            var result = await scope.Get<CatalogAdminService>().DeleteUsbSerialFilterAsync(filter.Id);
 
-        Report(
-            result.Match<string?>(
-                _ => null,
-                _ => "That filter no longer exists."),
-            "Deleted.");
-        await LoadAsync();
+            Report(
+                result.Match<string?>(
+                    _ => null,
+                    _ => "That filter no longer exists."),
+                "Deleted.");
+        });
     }
 }

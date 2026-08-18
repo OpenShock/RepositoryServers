@@ -1,7 +1,7 @@
 @page "/admin/firmware/releases"
 @attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
 @using OpenShock.RepositoryServer.RepoServerDb.Models
-@inherits AdminPageBase
+@inherits AdminDataPageBase
 
 <PageHeader Title="Releases">
     <Subtitle>
@@ -14,7 +14,7 @@
 <h2 class="text-lg font-semibold">In flight</h2>
 
 <BbCard Class="w-full overflow-hidden p-0">
-    <BbDataGrid TData="FirmwareRelease" Items="_releases" IsLoading="_loading" Striped="true"
+    <BbDataGrid TData="FirmwareRelease" Items="_releases" IsLoading="Loading" Striped="true"
                 StickyHeader="true">
         <EmptyTemplate>
             <p class="p-4 text-sm text-muted-foreground">Nothing in flight.</p>
@@ -88,7 +88,7 @@
 </p>
 
 <BbCard Class="w-full overflow-hidden p-0">
-    <BbDataGrid TData="FirmwareVersion" Items="_versions" IsLoading="_loading" Striped="true"
+    <BbDataGrid TData="FirmwareVersion" Items="_versions" IsLoading="Loading" Striped="true"
                 StickyHeader="true">
         <EmptyTemplate>
             <p class="p-4 text-sm text-muted-foreground">Nothing published yet.</p>
@@ -125,20 +125,14 @@
     private FirmwareRelease[] _releases = [];
     private FirmwareVersion[] _versions = [];
     private Dictionary<Guid, int> _noteCounts = new();
-    private bool _loading = true;
 
     private bool _changelogOpen;
     private Guid? _changelogReleaseId;
     private string _changelogVersion = string.Empty;
     private string _changelog = string.Empty;
 
-    protected override Task OnInitializedAsync() => LoadAsync();
-
-    private async Task LoadAsync()
+    protected override async Task LoadDataAsync(AsyncServiceScope scope)
     {
-        _loading = true;
-
-        await using var scope = CreateScope();
         var releases = scope.Get<ReleaseAdminService>();
 
         _releases = await releases.ListEditableAsync();
@@ -152,8 +146,6 @@
             .GroupBy(n => n.ReleaseId)
             .Select(g => new { ReleaseId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.ReleaseId, x => x.Count);
-
-        _loading = false;
     }
 
     /// <summary>
@@ -184,9 +176,13 @@
     {
         if (_changelogReleaseId is not { } releaseId) return;
 
-        await using (var scope = CreateScope())
+        var changelog = _changelog;
+
+        CloseChangelog();
+
+        await MutateAsync(async scope =>
         {
-            var result = await scope.Get<ReleaseAdminService>().FixChangelogAsync(releaseId, _changelog);
+            var result = await scope.Get<ReleaseAdminService>().FixChangelogAsync(releaseId, changelog);
 
             Report(
                 result.Match<string?>(
@@ -196,10 +192,7 @@
                                    "which cannot be edited.",
                     ChangelogMessage),
                 "Saved. The release is back in staging and can be published.");
-        }
-
-        CloseChangelog();
-        await LoadAsync();
+        });
     }
 
     private static string ChangelogMessage(InvalidChangelog invalid) => invalid.Error switch
@@ -219,7 +212,7 @@
 
         if (!confirmed) return;
 
-        await using (var scope = CreateScope())
+        await MutateAsync(async scope =>
         {
             var result = await scope.Get<ReleaseAdminService>().DeleteVersionAsync(version);
 
@@ -228,8 +221,6 @@
                     _ => null,
                     _ => "That version no longer exists."),
                 $"Unpublished {version}.");
-        }
-
-        await LoadAsync();
+        });
     }
 }

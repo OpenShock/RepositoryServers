@@ -1,7 +1,7 @@
 @page "/admin/firmware/boards"
 @attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
 @using OpenShock.RepositoryServer.RepoServerDb.Models
-@inherits AdminPageBase
+@inherits AdminDataPageBase
 
 <PageHeader Title="Boards">
     <Subtitle>
@@ -15,7 +15,7 @@
 </PageHeader>
 
 <BbCard Class="w-full overflow-hidden p-0">
-        <BbDataGrid TData="FirmwareBoard" Items="_boards" IsLoading="_loading" Striped="true"
+        <BbDataGrid TData="FirmwareBoard" Items="_boards" IsLoading="Loading" Striped="true"
                     StickyHeader="true">
             <EmptyTemplate>
                 <BbAlert Variant="AlertVariant.Warning" Class="m-2">
@@ -184,7 +184,6 @@
     private FirmwareChip[] _chips = [];
     private UsbDevice[] _usbDevices = [];
     private FirmwareBoardUsbDevice[] _attachments = [];
-    private bool _loading = true;
 
     private bool _formOpen;
     private bool _attachOpen;
@@ -197,21 +196,14 @@
     private Guid? _attachBoardId;
     private Guid? _attachDeviceId;
 
-    protected override Task OnInitializedAsync() => LoadAsync();
-
-    private async Task LoadAsync()
+    protected override async Task LoadDataAsync(AsyncServiceScope scope)
     {
-        _loading = true;
-
-        await using var scope = CreateScope();
         var catalog = scope.Get<CatalogAdminService>();
 
         _boards = await catalog.ListBoardsAsync();
         _chips = await catalog.ListChipsAsync();
         _usbDevices = await catalog.ListUsbDevicesAsync();
         _attachments = await catalog.ListBoardUsbDevicesAsync();
-
-        _loading = false;
     }
 
     private string AttachedDeviceNames(Guid boardId)
@@ -273,13 +265,21 @@
 
         FirmwareArtifactType[] required = [.. _requiredArtifactTypes];
 
-        await using (var scope = CreateScope())
+        // Read the form into locals before it is cleared: the change below runs after the dialog
+        // has closed, and a field cleared underneath it would submit an empty board name.
+        var editingBoardId = _editingBoardId;
+        var name = _name;
+
+        _formOpen = false;
+        ResetForm();
+
+        await MutateAsync(async scope =>
         {
             var catalog = scope.Get<CatalogAdminService>();
 
-            if (_editingBoardId is { } boardId)
+            if (editingBoardId is { } boardId)
             {
-                var updated = await catalog.UpdateBoardAsync(boardId, _name, chipId, required);
+                var updated = await catalog.UpdateBoardAsync(boardId, name, chipId, required);
                 Report(
                     updated.Match<string?>(
                         _ => null,
@@ -291,20 +291,16 @@
             }
             else
             {
-                var created = await catalog.CreateBoardAsync(_name, chipId, required);
+                var created = await catalog.CreateBoardAsync(name, chipId, required);
                 Report(
                     created.Match<string?>(
                         _ => null,
                         missing => $"No such {missing.Reference}.",
                         conflict => $"A board named \"{conflict.Name}\" already exists.",
                         InvalidNameMessage),
-                    $"Created {_name}.");
+                    $"Created {name}.");
             }
-        }
-
-        _formOpen = false;
-        ResetForm();
-        await LoadAsync();
+        });
     }
 
     private static string InvalidNameMessage(InvalidName invalid) =>
@@ -315,7 +311,7 @@
     {
         var discontinued = !board.Discontinued;
 
-        await using (var scope = CreateScope())
+        await MutateAsync(async scope =>
         {
             var result = await scope.Get<CatalogAdminService>()
                 .SetBoardDiscontinuedAsync(board.Id, discontinued);
@@ -325,16 +321,16 @@
                     _ => null,
                     _ => "That board no longer exists."),
                 discontinued ? "Discontinued. Existing hubs keep updating." : "Reinstated.");
-        }
-
-        await LoadAsync();
+        });
     }
 
     private async Task DeleteAsync(FirmwareBoard board)
     {
         if (!await ConfirmAsync("Delete board", $"Delete {board.Name}?")) return;
 
-        await using (var scope = CreateScope())
+        if (_editingBoardId == board.Id) ResetForm();
+
+        await MutateAsync(async scope =>
         {
             var result = await scope.Get<CatalogAdminService>().DeleteBoardAsync(board.Id);
 
@@ -344,10 +340,7 @@
                     _ => "That board no longer exists.",
                     inUse => $"Cannot delete: still referenced by {inUse.ReferencedBy}."),
                 "Deleted.");
-        }
-
-        if (_editingBoardId == board.Id) ResetForm();
-        await LoadAsync();
+        });
     }
 
     private async Task ApplyAttachmentAsync(bool detach)
@@ -358,7 +351,9 @@
             return;
         }
 
-        await using (var scope = CreateScope())
+        _attachDeviceId = null;
+
+        await MutateAsync(async scope =>
         {
             var catalog = scope.Get<CatalogAdminService>();
 
@@ -376,9 +371,6 @@
                         missing => $"No such {missing.Reference}."),
                     "Attached.");
             }
-        }
-
-        _attachDeviceId = null;
-        await LoadAsync();
+        });
     }
 }

@@ -2,7 +2,7 @@
 @attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
 @using OpenShock.RepositoryServer.RepoServerDb.Models
 @using BlazorBlueprint.Primitives
-@inherits AdminPageBase
+@inherits AdminDataPageBase
 
 <PageHeader Title="Publishers">
     <Subtitle>
@@ -16,7 +16,7 @@
 </PageHeader>
 
 <BbCard Class="w-full overflow-hidden p-0">
-        <BbDataGrid TData="SourceRepository" Items="_repositories" IsLoading="_loading" Striped="true"
+        <BbDataGrid TData="SourceRepository" Items="_repositories" IsLoading="Loading" Striped="true"
                     StickyHeader="true">
             <EmptyTemplate>
                 <BbAlert Variant="AlertVariant.Warning" Class="m-2">
@@ -170,7 +170,6 @@
     private static readonly RepositoryScope[] Scopes = Enum.GetValues<RepositoryScope>();
 
     private SourceRepository[] _repositories = [];
-    private bool _loading = true;
 
     private const string BrowseTab = "browse";
     private const string ManualTab = "manual";
@@ -196,14 +195,9 @@
             ? "Enter a user or organization first."
             : $"No public repositories found for {_listedOwner}.";
 
-    protected override Task OnInitializedAsync() => LoadAsync();
-
-    private async Task LoadAsync()
+    protected override async Task LoadDataAsync(AsyncServiceScope scope)
     {
-        _loading = true;
-        await using var scope = CreateScope();
         _repositories = await scope.Get<PublisherAdminService>().ListAsync();
-        _loading = false;
     }
 
     private void ToggleScope(RepositoryScope scope, bool selected)
@@ -309,16 +303,21 @@
             return;
         }
 
-        await using (var scope = CreateScope())
-        {
-            await scope.Get<PublisherAdminService>()
-                .UpsertAsync(_provider, _owner.Trim(), _repo.Trim(), [.. _scopes]);
-        }
+        // Read the form into locals before it is cleared: the change below runs after the dialog
+        // has closed, and a field cleared underneath it would register an empty repository.
+        var provider = _provider;
+        var owner = _owner.Trim();
+        var repo = _repo.Trim();
+        RepositoryScope[] scopes = [.. _scopes];
 
-        Report(null, $"Registered {_owner}/{_repo}.");
         _formOpen = false;
         ResetForm();
-        await LoadAsync();
+
+        await MutateAsync(async scope =>
+        {
+            await scope.Get<PublisherAdminService>().UpsertAsync(provider, owner, repo, scopes);
+            Report(null, $"Registered {owner}/{repo}.");
+        });
     }
 
     private async Task DeleteAsync(SourceRepository repository)
@@ -330,17 +329,17 @@
 
         if (!confirmed) return;
 
-        await using var scope = CreateScope();
-        var result = await scope.Get<PublisherAdminService>().DeleteAsync(repository.Id);
+        await MutateAsync(async scope =>
+        {
+            var result = await scope.Get<PublisherAdminService>().DeleteAsync(repository.Id);
 
-        Report(
-            result.Match<string?>(
-                _ => null,
-                _ => "That publisher no longer exists.",
-                inUse => $"Cannot remove: {inUse.ReferencedBy} record it as their source. " +
-                         "Clear its scopes instead, which revokes publishing without losing provenance."),
-            "Revoked.");
-
-        await LoadAsync();
+            Report(
+                result.Match<string?>(
+                    _ => null,
+                    _ => "That publisher no longer exists.",
+                    inUse => $"Cannot remove: {inUse.ReferencedBy} record it as their source. " +
+                             "Clear its scopes instead, which revokes publishing without losing provenance."),
+                "Revoked.");
+        });
     }
 }

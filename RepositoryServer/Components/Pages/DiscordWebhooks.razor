@@ -1,7 +1,7 @@
 @page "/admin/discord-webhooks"
 @attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
 @using OpenShock.RepositoryServer.RepoServerDb.Models
-@inherits AdminPageBase
+@inherits AdminDataPageBase
 
 <PageHeader Title="Discord webhooks">
     <Subtitle>
@@ -14,7 +14,7 @@
 </PageHeader>
 
 <BbCard Class="w-full overflow-hidden p-0">
-        <BbDataGrid TData="DiscordWebhook" Items="_webhooks" IsLoading="_loading" Striped="true"
+        <BbDataGrid TData="DiscordWebhook" Items="_webhooks" IsLoading="Loading" Striped="true"
                     StickyHeader="true">
             <EmptyTemplate>
                 <BbAlert Variant="AlertVariant.Info" Class="m-2">No webhooks. Nothing is notified.</BbAlert>
@@ -116,7 +116,6 @@
     private static readonly DiscordNotificationEvent[] Events = Enum.GetValues<DiscordNotificationEvent>();
 
     private DiscordWebhook[] _webhooks = [];
-    private bool _loading = true;
 
     private bool _formOpen;
     private Guid? _editingId;
@@ -125,14 +124,9 @@
     private readonly HashSet<DiscordNotificationEvent> _events = [];
     private bool _enabled = true;
 
-    protected override Task OnInitializedAsync() => LoadAsync();
-
-    private async Task LoadAsync()
+    protected override async Task LoadDataAsync(AsyncServiceScope scope)
     {
-        _loading = true;
-        await using var scope = CreateScope();
         _webhooks = await scope.Get<DiscordWebhookAdminService>().ListAsync();
-        _loading = false;
     }
 
     private void ToggleEvent(DiscordNotificationEvent notificationEvent, bool selected)
@@ -185,13 +179,22 @@
             return;
         }
 
-        await using (var scope = CreateScope())
+        // Read the form into locals before it is cleared: the change below runs after the dialog
+        // has closed, and a field cleared underneath it would save an unnamed webhook.
+        var editingId = _editingId;
+        var name = _name;
+        var enabled = _enabled;
+
+        _formOpen = false;
+        ResetForm();
+
+        await MutateAsync(async scope =>
         {
             var webhooks = scope.Get<DiscordWebhookAdminService>();
 
-            if (_editingId is { } webhookId)
+            if (editingId is { } webhookId)
             {
-                var result = await webhooks.UpdateAsync(webhookId, _name, url, events, _enabled);
+                var result = await webhooks.UpdateAsync(webhookId, name, url, events, enabled);
 
                 Report(
                     result.Match<string?>(
@@ -201,21 +204,19 @@
             }
             else
             {
-                await webhooks.CreateAsync(_name, url!, events, _enabled);
+                await webhooks.CreateAsync(name, url!, events, enabled);
                 Report(null, "Created.");
             }
-        }
-
-        _formOpen = false;
-        ResetForm();
-        await LoadAsync();
+        });
     }
 
     private async Task DeleteAsync(DiscordWebhook webhook)
     {
         if (!await ConfirmAsync("Delete webhook", $"Delete \"{webhook.Name}\"?")) return;
 
-        await using (var scope = CreateScope())
+        if (_editingId == webhook.Id) ResetForm();
+
+        await MutateAsync(async scope =>
         {
             var result = await scope.Get<DiscordWebhookAdminService>().DeleteAsync(webhook.Id);
 
@@ -224,9 +225,6 @@
                     _ => null,
                     _ => "That webhook no longer exists."),
                 "Deleted.");
-        }
-
-        if (_editingId == webhook.Id) ResetForm();
-        await LoadAsync();
+        });
     }
 }

@@ -1,7 +1,7 @@
 @page "/admin/firmware/advisories"
 @attribute [Authorize(Policy = AuthSchemas.Policies.Admin)]
 @using OpenShock.RepositoryServer.RepoServerDb.Models
-@inherits AdminPageBase
+@inherits AdminDataPageBase
 
 <PageHeader Title="Advisories">
     <Subtitle>
@@ -14,7 +14,7 @@
 </PageHeader>
 
 <BbCard Class="w-full overflow-hidden p-0">
-        <BbDataGrid TData="FirmwareAdvisory" Items="_advisories" IsLoading="_loading" Striped="true"
+        <BbDataGrid TData="FirmwareAdvisory" Items="_advisories" IsLoading="Loading" Striped="true"
                     StickyHeader="true">
             <EmptyTemplate>
                 <div class="flex flex-col items-center gap-3 py-12 text-center">
@@ -114,7 +114,6 @@
     private static readonly AdvisorySeverity[] Severities = Enum.GetValues<AdvisorySeverity>();
 
     private FirmwareAdvisory[] _advisories = [];
-    private bool _loading = true;
 
     private bool _formOpen;
     private Guid? _editingId;
@@ -124,14 +123,9 @@
     private string _affectedVersions = string.Empty;
     private string? _url;
 
-    protected override Task OnInitializedAsync() => LoadAsync();
-
-    private async Task LoadAsync()
+    protected override async Task LoadDataAsync(AsyncServiceScope scope)
     {
-        _loading = true;
-        await using var scope = CreateScope();
         _advisories = await scope.Get<AdvisoryAdminService>().ListAsync();
-        _loading = false;
     }
 
     private static BadgeVariant SeverityVariant(AdvisorySeverity severity) => severity switch
@@ -178,16 +172,26 @@
             return;
         }
 
+        // Read the form into locals before it is cleared: the change below runs after the dialog
+        // has closed, and a field cleared underneath it would submit an empty advisory.
         var url = string.IsNullOrWhiteSpace(_url) ? null : _url.Trim();
+        var editingId = _editingId;
+        var severity = _severity;
+        var title = _title;
+        var content = _content;
+        var affectedVersions = _affectedVersions;
 
-        await using (var scope = CreateScope())
+        _formOpen = false;
+        ResetForm();
+
+        await MutateAsync(async scope =>
         {
             var advisories = scope.Get<AdvisoryAdminService>();
 
-            if (_editingId is { } advisoryId)
+            if (editingId is { } advisoryId)
             {
                 var result = await advisories.UpdateAsync(
-                    advisoryId, _severity, _title, _content, _affectedVersions, url);
+                    advisoryId, severity, title, content, affectedVersions, url);
 
                 Report(
                     result.Match<string?>(
@@ -197,21 +201,19 @@
             }
             else
             {
-                await advisories.CreateAsync(_severity, _title, _content, _affectedVersions, url);
+                await advisories.CreateAsync(severity, title, content, affectedVersions, url);
                 Report(null, "Published to the manifest.");
             }
-        }
-
-        _formOpen = false;
-        ResetForm();
-        await LoadAsync();
+        });
     }
 
     private async Task DeleteAsync(FirmwareAdvisory advisory)
     {
         if (!await ConfirmAsync("Delete advisory", $"Delete \"{advisory.Title}\"?")) return;
 
-        await using (var scope = CreateScope())
+        if (_editingId == advisory.Id) ResetForm();
+
+        await MutateAsync(async scope =>
         {
             var result = await scope.Get<AdvisoryAdminService>().DeleteAsync(advisory.Id);
 
@@ -220,9 +222,6 @@
                     _ => null,
                     _ => "That advisory no longer exists."),
                 "Deleted.");
-        }
-
-        if (_editingId == advisory.Id) ResetForm();
-        await LoadAsync();
+        });
     }
 }
