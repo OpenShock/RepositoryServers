@@ -14,7 +14,7 @@ public sealed class LocalStorageService : IStorageService
     }
 
     /// <inheritdoc />
-    public async Task UploadFileAsync(string path, Stream content, bool publicRead, CancellationToken cancellationToken = default)
+    public async Task UploadFileAsync(string path, Stream content, CancellationToken cancellationToken = default)
     {
         var fullPath = ResolvePath(path);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
@@ -23,7 +23,7 @@ public sealed class LocalStorageService : IStorageService
     }
 
     /// <inheritdoc />
-    public Task CopyFileAsync(string sourcePath, string destinationPath, bool publicRead, CancellationToken cancellationToken = default)
+    public Task CopyFileAsync(string sourcePath, string destinationPath, CancellationToken cancellationToken = default)
     {
         var source = ResolvePath(sourcePath);
         var destination = ResolvePath(destinationPath);

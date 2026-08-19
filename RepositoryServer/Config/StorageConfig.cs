@@ -50,19 +50,4 @@ public sealed class S3StorageConfig
     /// AWS region. Required for AWS S3, optional for most S3-compatible services.
     /// </summary>
     public string? Region { get; init; }
-
-    /// <summary>
-    /// Whether to mark world-readable objects public-read with a canned ACL as they are written.
-    /// </summary>
-    /// <remarks>
-    /// Off by default, because ACLs are not universally available and sending one where they are
-    /// disabled fails the write rather than being ignored: Cloudflare R2 does not implement them at
-    /// all, and an AWS bucket on the default Object Ownership of "bucket owner enforced" answers
-    /// AccessControlListNotSupported.
-    ///
-    /// Leave it off where the bucket grants public read by policy, which is the only option on those
-    /// stores. Turn it on for a bucket that has ACLs enabled and no such policy. Either way the
-    /// staging prefix is never marked public: only published artifacts and module zips are.
-    /// </remarks>
-    public bool PublicReadAcl { get; init; }
 }

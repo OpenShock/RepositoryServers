@@ -10,13 +10,11 @@ public sealed class S3StorageService : IStorageService, IDisposable
     private readonly IAmazonS3 _s3Client;
     private readonly string _bucketName;
     private readonly string? _keyPrefix;
-    private readonly bool _publicReadAcl;
 
     public S3StorageService(S3StorageConfig config)
     {
         _bucketName = config.BucketName;
         _keyPrefix = config.KeyPrefix?.TrimEnd('/');
-        _publicReadAcl = config.PublicReadAcl;
 
         var s3Config = new AmazonS3Config();
 
@@ -34,7 +32,7 @@ public sealed class S3StorageService : IStorageService, IDisposable
     }
 
     /// <inheritdoc />
-    public async Task UploadFileAsync(string path, Stream content, bool publicRead, CancellationToken cancellationToken = default)
+    public async Task UploadFileAsync(string path, Stream content, CancellationToken cancellationToken = default)
     {
         var request = new PutObjectRequest
         {
@@ -42,14 +40,13 @@ public sealed class S3StorageService : IStorageService, IDisposable
             Key = ResolveKey(path),
             InputStream = content,
             ContentType = "application/octet-stream",
-            CannedACL = AclFor(publicRead),
         };
 
         await _s3Client.PutObjectAsync(request, cancellationToken);
     }
 
     /// <inheritdoc />
-    public async Task CopyFileAsync(string sourcePath, string destinationPath, bool publicRead, CancellationToken cancellationToken = default)
+    public async Task CopyFileAsync(string sourcePath, string destinationPath, CancellationToken cancellationToken = default)
     {
         // Server-side copy — the object never travels through this process.
         var request = new CopyObjectRequest
@@ -58,7 +55,6 @@ public sealed class S3StorageService : IStorageService, IDisposable
             SourceKey = ResolveKey(sourcePath),
             DestinationBucket = _bucketName,
             DestinationKey = ResolveKey(destinationPath),
-            CannedACL = AclFor(publicRead),
         };
 
         await _s3Client.CopyObjectAsync(request, cancellationToken);
@@ -128,17 +124,6 @@ public sealed class S3StorageService : IStorageService, IDisposable
             listRequest.ContinuationToken = response.NextContinuationToken;
         } while (response.IsTruncated == true);
     }
-
-    /// <summary>
-    /// The canned ACL to send, or null to send none and leave the bucket's own rules to decide.
-    /// </summary>
-    /// <remarks>
-    /// Null is not "private": it means this server states nothing about who may read the object.
-    /// On a bucket whose Object Ownership is "bucket owner enforced", or on any store that does not
-    /// implement ACLs, sending one is an error rather than a no-op, so it has to be opt-in.
-    /// </remarks>
-    private S3CannedACL? AclFor(bool publicRead)
-        => _publicReadAcl && publicRead ? S3CannedACL.PublicRead : null;
 
     private string ResolveKey(string path) => _keyPrefix != null ? $"{_keyPrefix}/{path}" : path;
 

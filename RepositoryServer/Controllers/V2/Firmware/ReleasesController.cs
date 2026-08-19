@@ -389,7 +389,7 @@ public class ReleasesController : OpenShockControllerBase
             var stagingPath = FirmwareArtifactFileNames.BuildStagingPath(releaseId, boardId, artifactType);
 
             await using var uploadStream = new MemoryStream(bytes);
-            await _storage.UploadFileAsync(stagingPath, uploadStream, publicRead: false, ct);
+            await _storage.UploadFileAsync(stagingPath, uploadStream, ct);
 
             _db.FirmwareStagedArtifacts.Add(new FirmwareStagedArtifact
             {
@@ -509,7 +509,7 @@ public class ReleasesController : OpenShockControllerBase
                 var publishedPath = FirmwareArtifactFileNames.BuildStoragePath(
                     release.Version, staged.BoardId, staged.ArtifactType);
 
-                await _storage.CopyFileAsync(stagingPath, publishedPath, publicRead: true, ct);
+                await _storage.CopyFileAsync(stagingPath, publishedPath, ct);
                 promoted.Add(publishedPath);
             }
         }
