@@ -1,0 +1,90 @@
+@*
+    The module form. Opened by the list page to add a module and by a module's own page to edit it,
+    which is why it is a component rather than markup on one of them.
+
+    It only edits the model it is given; saving is the page's business, because the two pages report
+    and reload differently.
+*@
+@using OpenShock.RepositoryServer.RepoServerDb.Models
+
+<BbDialog Open="Open" OpenChanged="OpenChanged">
+    <BbDialogContent Class="sm:max-w-lg">
+        <BbDialogHeader>
+            <BbDialogTitle>@(IdLocked ? $"Edit {Model.Id}" : "Add a module")</BbDialogTitle>
+            <BbDialogDescription>@Description</BbDialogDescription>
+        </BbDialogHeader>
+
+        <div class="flex flex-col gap-4 py-2">
+            <div class="flex flex-col gap-2">
+                <BbLabel For="module-id">Id</BbLabel>
+                <BbInput Id="module-id" @bind-Value="Model.Id" Disabled="IdLocked"
+                         Placeholder="openshock.overlay"/>
+            </div>
+            <div class="flex flex-col gap-2">
+                <BbLabel For="module-name">Name</BbLabel>
+                <BbInput Id="module-name" @bind-Value="Model.Name" Placeholder="Overlay"/>
+            </div>
+            <div class="flex flex-col gap-2">
+                <BbLabel For="module-description">Description</BbLabel>
+                <BbTextarea Id="module-description" @bind-Value="Model.Description"/>
+            </div>
+            <div class="flex flex-col gap-2">
+                <BbLabel For="module-source">Source URL</BbLabel>
+                <BbInput Id="module-source" @bind-Value="Model.SourceUrl"
+                         Placeholder="https://github.com/OpenShock/desktop"/>
+            </div>
+            <div class="flex flex-col gap-2">
+                <BbLabel For="module-icon">Icon URL</BbLabel>
+                <BbInput Id="module-icon" @bind-Value="Model.IconUrl"/>
+            </div>
+            <div class="flex flex-col gap-2">
+                <BbLabel>Owning repository</BbLabel>
+                <BbSelect TValue="Guid?" @bind-Value="Model.RepositoryId">
+                    <BbSelectTrigger TValue="Guid?">
+                        <BbSelectValue Placeholder="unassigned"/>
+                    </BbSelectTrigger>
+                    <BbSelectContent TValue="Guid?">
+                        @foreach (var repository in Repositories)
+                        {
+                            <BbSelectItem TValue="Guid?" Value="@repository.Id"
+                                          Text="@($"{repository.Owner}/{repository.Repo}")"/>
+                        }
+                    </BbSelectContent>
+                </BbSelect>
+                <p class="text-muted-foreground text-xs">
+                    Only this repository's CI may publish versions of the module.
+                </p>
+            </div>
+        </div>
+
+        <BbDialogFooter>
+            <BbButton Variant="ButtonVariant.Outline" OnClick="() => OpenChanged.InvokeAsync(false)">
+                Cancel
+            </BbButton>
+            <BbButton OnClick="OnSave">Save</BbButton>
+        </BbDialogFooter>
+    </BbDialogContent>
+</BbDialog>
+
+@code {
+    [Parameter] public bool Open { get; set; }
+
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+
+    /// <summary>The form's state. Edited in place, so the page holds the instance it passed in.</summary>
+    [Parameter, EditorRequired] public required ModuleFormModel Model { get; set; }
+
+    /// <summary>Repositories offered as the owner. Empty is legitimate: an owner is optional.</summary>
+    [Parameter, EditorRequired] public required SourceRepository[] Repositories { get; set; }
+
+    /// <summary>Set when editing an existing module, whose id is its primary key.</summary>
+    [Parameter] public bool IdLocked { get; set; }
+
+    [Parameter] public EventCallback OnSave { get; set; }
+
+    private string Description => IdLocked
+        ? "The id is the module's key in the index and in its storage paths, so it is fixed once the "
+          + "module exists. A module with no owning repository is closed to every publisher."
+        : "Saving an id that already exists updates that module. A module with no owning repository "
+          + "is closed to every publisher.";
+}

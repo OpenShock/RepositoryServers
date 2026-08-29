@@ -3,6 +3,7 @@ using OneOf;
 using OneOf.Types;
 using OpenShock.RepositoryServer.RepoServerDb;
 using OpenShock.RepositoryServer.RepoServerDb.Models;
+using Semver;
 using Version = OpenShock.RepositoryServer.RepoServerDb.Models.Version;
 
 namespace OpenShock.RepositoryServer.Services.Admin;
@@ -18,6 +19,8 @@ namespace OpenShock.RepositoryServer.Services.Admin;
 /// </remarks>
 public sealed class ModuleAdminService
 {
+    private const int Sha256Length = 32;
+
     private readonly RepoServerContext _db;
 
     public ModuleAdminService(RepoServerContext db)
@@ -31,8 +34,14 @@ public sealed class ModuleAdminService
             .OrderBy(m => m.Id)
             .ToArrayAsync(ct);
 
+    /// <summary>
+    /// One module with its published versions, for the page that manages it. Null when there is no
+    /// such module, which the page renders rather than treating as an error.
+    /// </summary>
     public Task<Module?> FindAsync(string moduleId, CancellationToken ct = default) =>
-        _db.Modules.FirstOrDefaultAsync(m => m.Id == moduleId.ToLowerInvariant(), ct);
+        _db.Modules
+            .Include(m => m.Versions)
+            .FirstOrDefaultAsync(m => m.Id == moduleId.ToLowerInvariant(), ct);
 
     public async Task<OneOf<Module, ReferenceNotFound>> UpsertAsync(
         string moduleId, string name, string description, Uri? sourceUrl, Uri? iconUrl,
@@ -83,6 +92,64 @@ public sealed class ModuleAdminService
             .Where(v => v.Module == moduleId.ToLowerInvariant())
             .OrderBy(v => v.VersionName)
             .ToArrayAsync(ct);
+
+    /// <summary>
+    /// Registers a published version of a module, or corrects one already registered.
+    /// </summary>
+    /// <remarks>
+    /// The CI/CD endpoint refuses to republish a version that exists, because the zip it uploaded is
+    /// immutable once clients can see it. This is the deliberate override: an admin correcting a
+    /// changelog link, or entering a version whose zip is already hosted somewhere the server never
+    /// uploaded to. It writes only the row that advertises the zip — no bytes are moved — so the
+    /// digest is the admin's to get right, and it is validated here rather than trusted.
+    /// </remarks>
+    public async Task<OneOf<Version, ReferenceNotFound, InvalidVersion, InvalidHash>> UpsertVersionAsync(
+        string moduleId, string versionName, Uri zipUrl, byte[] hashSha256, Uri? changelogUrl,
+        Uri? releaseUrl, CancellationToken ct = default)
+    {
+        var normalizedModule = moduleId.ToLowerInvariant();
+        var normalizedVersion = versionName.ToLowerInvariant();
+
+        // Strict, and matching the length the CI/CD endpoint parses with: the index is built by
+        // parsing these back out, so anything this accepts and that cannot has to be caught here.
+        if (!SemVersion.TryParse(normalizedVersion, SemVersionStyles.Strict, out _, maxLength: 64))
+        {
+            return new InvalidVersion(versionName);
+        }
+
+        if (hashSha256.Length != Sha256Length)
+        {
+            return new InvalidHash(hashSha256.Length);
+        }
+
+        if (!await _db.Modules.AnyAsync(m => m.Id == normalizedModule, ct))
+        {
+            return new ReferenceNotFound("module");
+        }
+
+        var version = await _db.Versions
+            .FirstOrDefaultAsync(v => v.Module == normalizedModule && v.VersionName == normalizedVersion, ct);
+
+        if (version is null)
+        {
+            version = new Version
+            {
+                Module = normalizedModule,
+                VersionName = normalizedVersion,
+                ZipUrl = zipUrl,
+                HashSha256 = hashSha256
+            };
+            _db.Versions.Add(version);
+        }
+
+        version.ZipUrl = zipUrl;
+        version.HashSha256 = hashSha256;
+        version.ChangelogUrl = changelogUrl;
+        version.ReleaseUrl = releaseUrl;
+
+        await _db.SaveChangesAsync(ct);
+        return version;
+    }
 
     /// <summary>
     /// Removes a published module version. The zip stays in storage; only the row that advertises it

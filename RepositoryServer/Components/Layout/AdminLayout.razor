@@ -218,6 +218,9 @@
         "usb-serial-filters" => "Serial filters",
         "repositories" => "Publishers",
         "discord-webhooks" => "Discord webhooks",
+        // A dotted segment is a record's own id — a module's, say — and those are lowercase by
+        // definition. Title-casing one would print an id that does not exist.
+        _ when segment.Contains('.') => segment,
         _ => string.Concat(char.ToUpperInvariant(segment[0]), segment[1..].Replace('-', ' '))
     };
 }

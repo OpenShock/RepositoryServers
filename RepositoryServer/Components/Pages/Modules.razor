@@ -5,9 +5,10 @@
 
 <PageHeader Title="Desktop modules">
     <Subtitle>
-        Modules served by the desktop repository index. The owning repository is the authorization decision
-        for publishing: a module with no owner is closed to every publisher rather than open to any, which
-        is the right state for one not yet wired to its CI.
+        Modules served by the desktop repository index. The owning repository is the authorization
+        decision for publishing: a module with no owner is closed to every publisher rather than open to
+        any, which is the right state for one not yet wired to its CI. Open a module to manage the
+        versions it advertises.
     </Subtitle>
     <Actions>
         <BbButton OnClick="OpenCreate">Add module</BbButton>
@@ -15,162 +16,82 @@
 </PageHeader>
 
 <BbCard Class="w-full overflow-hidden p-0">
-        <BbDataGrid TData="Module" Items="_modules" IsLoading="Loading" Striped="true" StickyHeader="true">
-            <EmptyTemplate>
-                <div class="flex flex-col items-center gap-3 py-12 text-center">
-                    <p class="text-muted-foreground">No modules.</p>
-                    <BbButton Variant="ButtonVariant.Outline" OnClick="OpenCreate">Add the first module</BbButton>
-                </div>
-            </EmptyTemplate>
-            <Columns>
-                <BbDataGridPropertyColumn TData="Module" TProp="string" Property="m => m.Id" Title="Id">
-                    <CellTemplate>
-                        <code>@context.Id</code>
-                    </CellTemplate>
-                </BbDataGridPropertyColumn>
-                <BbDataGridPropertyColumn TData="Module" TProp="string" Property="m => m.Name" Title="Name"/>
-                <BbDataGridTemplateColumn TData="Module" Title="Owner" Sortable="false">
-                    @if (OwnerName(context.RepositoryId) is { } owner)
-                    {
-                        <span class="text-muted-foreground">@owner</span>
-                    }
-                    else
-                    {
-                        <BbBadge Variant="BadgeVariant.Destructive">unassigned</BbBadge>
-                    }
-                </BbDataGridTemplateColumn>
-                <BbDataGridTemplateColumn TData="Module" Title="Versions" Sortable="false">
+    <BbDataGrid TData="Module" Items="_modules" IsLoading="Loading" Striped="true" StickyHeader="true">
+        <EmptyTemplate>
+            <div class="flex flex-col items-center gap-3 py-12 text-center">
+                <p class="text-muted-foreground">No modules.</p>
+                <BbButton Variant="ButtonVariant.Outline" OnClick="OpenCreate">Add the first module</BbButton>
+            </div>
+        </EmptyTemplate>
+        <Columns>
+            <BbDataGridPropertyColumn TData="Module" TProp="string" Property="m => m.Id" Title="Id">
+                <CellTemplate>
+                    @* The id is the link rather than a separate action: it is what identifies the row. *@
+                    <a href="@ModuleHref(context)" class="underline"><code>@context.Id</code></a>
+                </CellTemplate>
+            </BbDataGridPropertyColumn>
+            <BbDataGridPropertyColumn TData="Module" TProp="string" Property="m => m.Name" Title="Name"/>
+            <BbDataGridTemplateColumn TData="Module" Title="Owner" Sortable="false">
+                @if (OwnerName(context.RepositoryId) is { } owner)
+                {
+                    <span class="text-muted-foreground">@owner</span>
+                }
+                else
+                {
+                    <BbBadge Variant="BadgeVariant.Destructive">unassigned</BbBadge>
+                }
+            </BbDataGridTemplateColumn>
+            <BbDataGridTemplateColumn TData="Module" Title="Versions" Sortable="false">
+                @if (context.Versions.Count == 0)
+                {
+                    <span class="text-muted-foreground">none published</span>
+                }
+                else
+                {
                     <span class="text-muted-foreground">@context.Versions.Count</span>
-                </BbDataGridTemplateColumn>
-                <BbDataGridTemplateColumn TData="Module" Title="" Sortable="false" Width="0">
-                    <div class="flex justify-end gap-1">
-                        <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall" OnClick="() => OpenEdit(context)" AriaLabel="Edit" title="Edit">
+                    @if (ModuleVersions.Latest(context.Versions) is { } latest)
+                    {
+                        <span class="text-muted-foreground">, latest <code>@latest</code></span>
+                    }
+                }
+            </BbDataGridTemplateColumn>
+            <BbDataGridTemplateColumn TData="Module" Title="" Sortable="false" Width="0">
+                <div class="flex justify-end gap-1">
+                    <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall"
+                              Href="@ModuleHref(context)" AriaLabel="Versions" title="Versions">
+                        <Glyph Name="IconName.Package"/>
+                    </BbButton>
+                    <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall" OnClick="() => OpenEdit(context)" AriaLabel="Edit" title="Edit">
                         <Glyph Name="IconName.Pencil"/>
                     </BbButton>
-                        <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall" Class="text-destructive" OnClick="() => DeleteAsync(context)" AriaLabel="Delete" title="Delete">
+                    <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall" Class="text-destructive" OnClick="() => DeleteAsync(context)" AriaLabel="Delete" title="Delete">
                         <Glyph Name="IconName.Trash"/>
                     </BbButton>
-                    </div>
-                </BbDataGridTemplateColumn>
-            </Columns>
+                </div>
+            </BbDataGridTemplateColumn>
+        </Columns>
     </BbDataGrid>
 </BbCard>
 
-<BbDialog @bind-Open="_formOpen">
-    <BbDialogContent Class="sm:max-w-lg">
-        <BbDialogHeader>
-            <BbDialogTitle>@(_editing ? $"Edit {_id}" : "Add a module")</BbDialogTitle>
-            <BbDialogDescription>
-                Saving an id that already exists updates that module. A module with no owning
-                repository is closed to every publisher.
-            </BbDialogDescription>
-        </BbDialogHeader>
-
-        <div class="flex flex-col gap-4 py-2">
-            <div class="flex flex-col gap-2">
-                <BbLabel For="id">Id</BbLabel>
-                <BbInput Id="id" @bind-Value="_id" Placeholder="openshock.overlay"/>
-            </div>
-            <div class="flex flex-col gap-2">
-                <BbLabel For="name">Name</BbLabel>
-                <BbInput Id="name" @bind-Value="_name" Placeholder="Overlay"/>
-            </div>
-            <div class="flex flex-col gap-2">
-                <BbLabel For="description">Description</BbLabel>
-                <BbTextarea Id="description" @bind-Value="_description"/>
-            </div>
-            <div class="flex flex-col gap-2">
-                <BbLabel For="source">Source URL</BbLabel>
-                <BbInput Id="source" @bind-Value="_sourceUrl" Placeholder="https://github.com/OpenShock/desktop"/>
-            </div>
-            <div class="flex flex-col gap-2">
-                <BbLabel For="icon">Icon URL</BbLabel>
-                <BbInput Id="icon" @bind-Value="_iconUrl"/>
-            </div>
-            <div class="flex flex-col gap-2">
-                <BbLabel>Owning repository</BbLabel>
-                <BbSelect TValue="Guid?" @bind-Value="_repositoryId">
-                    <BbSelectTrigger TValue="Guid?">
-                        <BbSelectValue Placeholder="unassigned"/>
-                    </BbSelectTrigger>
-                    <BbSelectContent TValue="Guid?">
-                        @foreach (var repository in _repositories)
-                        {
-                            <BbSelectItem TValue="Guid?" Value="@repository.Id"
-                                          Text="@($"{repository.Owner}/{repository.Repo}")"/>
-                        }
-                    </BbSelectContent>
-                </BbSelect>
-            </div>
-        </div>
-
-        <BbDialogFooter>
-            <BbButton Variant="ButtonVariant.Outline" OnClick="() => _formOpen = false">Cancel</BbButton>
-            <BbButton OnClick="SaveAsync">Save</BbButton>
-        </BbDialogFooter>
-    </BbDialogContent>
-</BbDialog>
-
-@if (_versions.Length > 0)
-{
-    <h2 class="mt-8 mb-3 text-lg font-semibold">Published versions</h2>
-    <p class="mb-4 max-w-3xl text-sm text-muted-foreground">
-        Removing a version withdraws it from the index. The zip stays in storage so a client mid-download
-        is not cut off.
-    </p>
-
-    <BbCard Class="p-0 overflow-hidden">
-        <BbDataGrid TData="ModuleVersion" Items="_versions" Striped="true" StickyHeader="true">
-            <Columns>
-                <BbDataGridPropertyColumn TData="ModuleVersion" TProp="string" Property="v => v.Module"
-                                          Title="Module">
-                    <CellTemplate>
-                        <code>@context.Module</code>
-                    </CellTemplate>
-                </BbDataGridPropertyColumn>
-                <BbDataGridPropertyColumn TData="ModuleVersion" TProp="string" Property="v => v.VersionName"
-                                          Title="Version">
-                    <CellTemplate>
-                        <code>@context.VersionName</code>
-                    </CellTemplate>
-                </BbDataGridPropertyColumn>
-                <BbDataGridTemplateColumn TData="ModuleVersion" Title="" Sortable="false" Width="8rem">
-                    <div class="flex justify-end">
-                        <BbButton Variant="ButtonVariant.Ghost" Size="ButtonSize.IconSmall" Class="text-destructive" OnClick="() => DeleteVersionAsync(context)" AriaLabel="Withdraw" title="Withdraw">
-                        <Glyph Name="IconName.Trash"/>
-                    </BbButton>
-                    </div>
-                </BbDataGridTemplateColumn>
-            </Columns>
-        </BbDataGrid>
-    </BbCard>
-}
+<ModuleFormDialog @bind-Open="_formOpen" Model="_form" Repositories="_repositories"
+                  IdLocked="_editing" OnSave="SaveAsync"/>
 
 @code {
     private Module[] _modules = [];
     private SourceRepository[] _repositories = [];
-    private ModuleVersion[] _versions = [];
 
     private bool _formOpen;
     private bool _editing;
-    private string _id = string.Empty;
-    private string _name = string.Empty;
-    private string? _description;
-    private string? _sourceUrl;
-    private string? _iconUrl;
-    private Guid? _repositoryId;
+    private ModuleFormModel _form = new();
 
     protected override async Task LoadDataAsync(AsyncServiceScope scope)
     {
         _modules = await scope.Get<ModuleAdminService>().ListAsync();
         _repositories = await scope.Get<PublisherAdminService>().ListAsync();
-
-        _versions = _modules
-            .SelectMany(m => m.Versions.Select(v => new ModuleVersion(m.Id, v.VersionName)))
-            .OrderBy(v => v.Module)
-            .ThenBy(v => v.VersionName)
-            .ToArray();
     }
+
+    private static string ModuleHref(Module module) =>
+        $"/admin/desktop/modules/{Uri.EscapeDataString(module.Id)}";
 
     private string? OwnerName(Guid? repositoryId)
     {
@@ -182,60 +103,32 @@
     private void OpenCreate()
     {
         _editing = false;
-        ResetForm();
+        _form = new ModuleFormModel();
         _formOpen = true;
     }
 
     private void OpenEdit(Module module)
     {
         _editing = true;
+        _form = ModuleFormModel.From(module);
         _formOpen = true;
-        _id = module.Id;
-        _name = module.Name;
-        _description = module.Description;
-        _sourceUrl = module.SourceUrl?.ToString();
-        _iconUrl = module.IconUrl?.ToString();
-        _repositoryId = module.RepositoryId;
-    }
-
-    private void ResetForm()
-    {
-        _id = string.Empty;
-        _name = string.Empty;
-        _description = null;
-        _sourceUrl = null;
-        _iconUrl = null;
-        _repositoryId = null;
     }
 
     private async Task SaveAsync()
     {
-        if (string.IsNullOrWhiteSpace(_id) || string.IsNullOrWhiteSpace(_name))
+        if (!_form.TryGetValues(out var values, out var error))
         {
-            ReportError("Id and name are both required.");
+            ReportError(error);
             return;
         }
-
-        if (!TryParseUri(_sourceUrl, out var sourceUrl) || !TryParseUri(_iconUrl, out var iconUrl))
-        {
-            ReportError("Source and icon must be absolute URLs, or left empty.");
-            return;
-        }
-
-        // Read the form into locals before it is cleared: the change below runs after the dialog
-        // has closed, and a field cleared underneath it would save an unnamed module.
-        var id = _id.Trim();
-        var name = _name.Trim();
-        var description = _description ?? string.Empty;
-        var repositoryId = _repositoryId;
 
         _formOpen = false;
-        ResetForm();
 
         await MutateAsync(async scope =>
         {
             var result = await scope.Get<ModuleAdminService>().UpsertAsync(
-                id, name, description, sourceUrl, iconUrl, repositoryId);
+                values.Id, values.Name, values.Description, values.SourceUrl, values.IconUrl,
+                values.RepositoryId);
 
             Report(
                 result.Match<string?>(
@@ -264,35 +157,4 @@
                 "Deleted.");
         });
     }
-
-    private async Task DeleteVersionAsync(ModuleVersion version)
-    {
-        var confirmed = await ConfirmAsync(
-            "Withdraw version",
-            $"Withdraw {version.Module} {version.VersionName} from the index?",
-            confirmText: "Withdraw");
-
-        if (!confirmed) return;
-
-        await MutateAsync(async scope =>
-        {
-            var result = await scope.Get<ModuleAdminService>()
-                .DeleteVersionAsync(version.Module, version.VersionName);
-
-            Report(
-                result.Match<string?>(
-                    _ => null,
-                    _ => "That version no longer exists."),
-                $"Withdrew {version.Module} {version.VersionName}.");
-        });
-    }
-
-    private static bool TryParseUri(string? raw, out Uri? uri)
-    {
-        uri = null;
-        if (string.IsNullOrWhiteSpace(raw)) return true;
-        return Uri.TryCreate(raw.Trim(), UriKind.Absolute, out uri);
-    }
-
-    private sealed record ModuleVersion(string Module, string VersionName);
 }

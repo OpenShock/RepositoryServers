@@ -167,7 +167,8 @@ It is grouped as shared, firmware and desktop:
 | `/admin/discord-webhooks` | Notification targets, shared |
 | `/admin/firmware/releases` | Changelog fixes and unpublishing versions |
 | `/admin/firmware/boards`, `/chips`, `/usb-devices`, `/usb-serial-filters`, `/advisories` | The firmware catalog |
-| `/admin/desktop/modules` | Desktop modules and their versions |
+| `/admin/desktop/modules` | Desktop modules, their owners and how many versions each has |
+| `/admin/desktop/modules/{id}` | One module: its metadata, and the versions it advertises |
 
 If a machine-readable admin surface is needed later, it will be a separate automation API with its own
 tokens, built on the same services.
